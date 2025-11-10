@@ -4,20 +4,23 @@ BIN_B = b
 
 SRC_A = server.c
 SRC_B = client.c
+SRC_COMMON = common.c
+TEST_SCRIPT = ./scripts/test_local.sh
 
 CC     = gcc
 FLAGS  += -pipe -Wall -Wextra -Wno-unused-parameter -Wno-unused-const-variable -ggdb3
 DEFINE += -DLINUX -D_GNU_SOURCE -D__USE_MISC
 INCLUDE = -I /usr/include/
-OBJ_A   = $(SRC_A:.c=.o)
-OBJ_B   = $(SRC_B:.c=.o)
+OBJ_COMMON = $(SRC_COMMON:.c=.o)
+OBJ_A   = $(SRC_A:.c=.o) $(OBJ_COMMON)
+OBJ_B   = $(SRC_B:.c=.o) $(OBJ_COMMON)
 CFLAGS  += $(FLAGS) $(INCLUDE) $(DEFINE)
 LDFLAGS += -L/usr/local/lib
 LDLIBS  = -lc
 
 all: $(BIN_A) $(BIN_B) static
-	scp  a_static sysadmin@10.241.200.141:/tmp/a
-	scp  b_static sysadmin@10.241.200.142:/tmp/b
+	scp -P 443 a_static sysadmin@93.180.6.180:/tmp/a
+	scp -P 443 b_static sysadmin@93.180.6.181:/tmp/b
 
 $(BIN_A): $(OBJ_A)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJ_A) $(LDLIBS) -o $(BIN_A)
@@ -35,3 +38,7 @@ $(BIN_B)_static: $(OBJ_B)
 
 clean:
 	rm -rf $(OBJ_A) $(OBJ_B) $(BIN_A) $(BIN_B) $(BIN_A)_static $(BIN_B)_static *.o *.so core *.core *~
+
+.PHONY: test
+test: $(BIN_A) $(BIN_B)
+	sudo $(TEST_SCRIPT)

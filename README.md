@@ -26,5 +26,6 @@ Start a client on a machine 2.
 ```
 This will connect client to the server machine with mac `11:22:33:44:55:66`
 
+By default the client disables local echo for a clean remote shell. Append `--local-echo` if you explicitly need to see your keystrokes locally.
 
 
