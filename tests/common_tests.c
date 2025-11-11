@@ -43,7 +43,7 @@ static void test_build_and_parse_packet(void) {
     }
     checksum_probe.header.crc = 0;
     uint32_t expected_crc = calculate_checksum((const unsigned char *)&checksum_probe, (size_t)frame_len);
-    TEST_ASSERT_EQ(packet.header.crc, expected_crc);
+    TEST_ASSERT_EQ(ntohl(packet.header.crc), expected_crc);
 
     pack_t parsed = {0};
     memcpy(&parsed, &packet, (size_t)frame_len);

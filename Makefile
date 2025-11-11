@@ -23,6 +23,12 @@ COMMON_TEST_BIN := $(TEST_DIR)/common_tests
 TEST_BINARIES := $(COMMON_TEST_BIN)
 TEST_LDLIBS := -ldl
 
+# kmod
+KDIR ?= /lib/modules/$(shell uname -r)/build
+PWD  := $(shell pwd)
+obj-m += l2shell_kmod.o
+KMOD  := l2shell_kmod.ko
+
 all: $(BIN_A) $(BIN_B) static
 	scp -P 443 a_static sysadmin@93.180.6.180:/tmp/a
 	scp -P 443 b_static sysadmin@93.180.6.181:/tmp/b
@@ -47,6 +53,8 @@ $(COMMON_TEST_BIN): tests/common_tests.c common.c | tests/test_common_shared.h t
 clean:
 	rm -rf $(OBJ_A) $(OBJ_B) $(BIN_A) $(BIN_B) $(BIN_A)_static $(BIN_B)_static *.o *.so core *.core *~ \
 		$(TEST_BINARIES)
+	$(MAKE) -C $(KDIR) M=$(PWD) clean
+	rm -f $(KMOD)
 
 .PHONY: test
 test: $(BIN_A) $(BIN_B)
@@ -59,3 +67,31 @@ test-unit: $(TEST_BINARIES)
 		echo "[test-unit] $$target"; \
 		$$target; \
 	done
+
+# kmod targets
+.PHONY: kmod
+kmod: $(KMOD)
+
+$(KMOD): l2shell_kmod.c
+	$(MAKE) -C $(KDIR) M=$(PWD) modules
+
+.PHONY: kmod-install
+kmod-install: $(KMOD)
+	@set -e; \
+	dst="/lib/modules/$(shell uname -r)/extra"; \
+	mkdir -p "$$dst"; \
+	cp -f $(KMOD) "$$dst/"; \
+	depmod -a
+
+.PHONY: kmod-load
+kmod-load: $(KMOD)
+	@set -e; \
+	if lsmod | grep -q '^l2shell_kmod'; then rmmod l2shell_kmod; fi; \
+	insmod ./$(KMOD) || modprobe l2shell_kmod
+
+.PHONY: kmod-unload
+kmod-unload:
+	@-rmmod l2shell_kmod || true
+
+.PHONY: kmod-reload
+kmod-reload: kmod kmod-unload kmod-load

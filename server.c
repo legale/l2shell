@@ -30,6 +30,7 @@
 int sh_fd = -1;
 volatile sig_atomic_t pid = -1;
 static packet_dedup_t server_rx_dedup;
+static time_t last_data_time = 0;
 
 ssize_t write_all(int fd, const void *buf, size_t count) {
     const char *ptr = (const char *)buf;
@@ -93,7 +94,7 @@ ssize_t handle_client_read(int sockfd, pack_t *packet, struct sockaddr_ll *saddr
 
     if (packet_dedup_should_drop(&server_rx_dedup,
                                  (const uint8_t *)header->eth_hdr.ether_shost,
-                                 header->crc,
+                                 ntohl(header->crc),
                                  payload_size_host,
                                  signature_host,
                                  PACKET_DEDUP_WINDOW_NS)) {
@@ -108,8 +109,11 @@ ssize_t handle_client_read(int sockfd, pack_t *packet, struct sockaddr_ll *saddr
         return payload_size;
     }
 
-    if (sh_fd != -1 && payload_size > 0) {
-        write_all(sh_fd, packet->payload, (size_t)payload_size);
+    if (payload_size > 0) {
+        if (sh_fd != -1) {
+            write_all(sh_fd, packet->payload, (size_t)payload_size);
+        }
+        last_data_time = time(NULL);
     }
 
     return payload_size;
@@ -123,6 +127,8 @@ void handle_client_write(int sockfd, int sh_fd, pack_t *packet,
 
     // Проверка успешности чтения из sh_fd
     if (ret <= 0) return; // Если чтение не удалось, выходим
+
+    last_data_time = time(NULL);
 
     int packet_len = build_packet(packet, (size_t)ret, (uint8_t *)ifr->ifr_hwaddr.sa_data,
                                   (uint8_t *)saddr->sll_addr, SERVER_SIGNATURE);
@@ -149,7 +155,7 @@ void handle_client_write(int sockfd, int sh_fd, pack_t *packet,
     if (send_ret < 0) {
         perror("send");
     } else {
-        printf("sent: %zd psize: %zu checksum: %u\n", send_ret, (size_t)ret, packet->header.crc);
+        printf("sent: %zd psize: %zu checksum: %u\n", send_ret, (size_t)ret, ntohl(packet->header.crc));
     }
 }
 
@@ -169,7 +175,6 @@ void start_command_process(char *command) {
 }
 
 #define TIMEOUT 10
-time_t last_data_time = 0;
 
 // Функция для завершения процесса команды
 void check_command_termination() {
@@ -182,21 +187,20 @@ void check_command_termination() {
             close(sh_fd);
             sh_fd = -1;
             pid = -1;
+            last_data_time = 0;
+            return;
         }
 
-        // Проверка таймера
-        time_t current_time = time(NULL);
-        if (!last_data_time) last_data_time = current_time;
-        if (difftime(current_time, last_data_time) >= TIMEOUT) {
-            printf("No data received for 10 seconds. Terminating session.\n");
-            kill(current_pid, SIGTERM); // Завершение процесса
-            close(sh_fd);
-            sh_fd = -1;
-            pid = -1;
-            last_data_time = 0;
-        } else {
-            // Сброс таймера
-            last_data_time = current_time;
+        if (last_data_time) {
+            time_t current_time = time(NULL);
+            if (difftime(current_time, last_data_time) >= TIMEOUT) {
+                printf("No data received for 10 seconds. Terminating session.\n");
+                kill(current_pid, SIGTERM); // Завершение процесса
+                close(sh_fd);
+                sh_fd = -1;
+                pid = -1;
+                last_data_time = 0;
+            }
         }
     }
 }
@@ -268,7 +272,17 @@ int main(int argc, char *argv[]) {
         }
         int max_fd = (sh_fd > sockfd) ? sh_fd : sockfd;
 
-        select(max_fd + 1, &fds, NULL, NULL, NULL);
+        int ready = select(max_fd + 1, &fds, NULL, NULL, NULL);
+        if (ready < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            perror("select");
+            continue;
+        }
+        if (ready == 0) {
+            continue;
+        }
 
         check_command_termination();
 

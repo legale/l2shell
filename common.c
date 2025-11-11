@@ -11,8 +11,7 @@
 
 static const uint8_t key_magic[BLOCK_SIZE] = {4, 1, 2, 3};
 
-const unsigned char broadcast_mac[ETH_ALEN] = {0xff, 0xff, 0xff,
-                                               0xff, 0xff, 0xff};
+const unsigned char broadcast_mac[ETH_ALEN] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
 void enc_dec(const uint8_t *input, uint8_t *output, const uint8_t *key, size_t len) {
     if (len == 0) return;
@@ -57,7 +56,7 @@ int build_packet(pack_t *packet, size_t payload_size, const uint8_t src_mac[ETH_
 
     size_t frame_len = sizeof(packh_t) + payload_size;
     uint32_t crc = calculate_checksum((const uint8_t *)packet, frame_len);
-    packet->header.crc = crc;
+    packet->header.crc = htonl(crc);
 
     if (payload_size > 0) {
         enc_dec(packet->payload, packet->payload, (const uint8_t *)&packet->header.crc, payload_size);
@@ -74,14 +73,17 @@ int parse_packet(pack_t *packet, ssize_t frame_len, uint32_t expected_signature)
     size_t len = (size_t)frame_len;
     packh_t *header = &packet->header;
 
+    // Проверяем тип протокола
     if (ntohs(header->eth_hdr.ether_type) != ETHER_TYPE_CUSTOM) {
         return -1;
     }
 
+    // Проверяем сигнатуру пакета
     if (ntohl(header->signature) != expected_signature) {
         return -1;
     }
 
+    // Проверяем размер полезной нагрузки
     uint32_t payload_size = ntohl(header->payload_size);
     if (payload_size > MAX_PAYLOAD_SIZE) {
         fprintf(stderr, "error: payload size too large: %u\n", payload_size);
@@ -89,22 +91,24 @@ int parse_packet(pack_t *packet, ssize_t frame_len, uint32_t expected_signature)
     }
 
     size_t expected_len = sizeof(packh_t) + payload_size;
+    // Проверяем, что пакет не усечен
     if (len < expected_len) {
         fprintf(stderr, "error: truncated packet: have=%zu expected=%zu\n", len, expected_len);
         return -1;
     }
-
+    // Расшифровываем полезную нагрузку
     if (payload_size > 0) {
         enc_dec(packet->payload, packet->payload, (const uint8_t *)&packet->header.crc, payload_size);
     }
 
-    uint32_t crc = header->crc;
+    uint32_t crc_net = header->crc;
     header->crc = 0;
     uint32_t crc_calc = calculate_checksum((const uint8_t *)packet, expected_len);
-    header->crc = crc;
+    header->crc = crc_net;
 
-    if (crc != crc_calc) {
-        fprintf(stderr, "error: crc mismatch: recv: %u expected: %u\n", crc, crc_calc);
+    // Проверяем CRC
+    if (ntohl(crc_net) != crc_calc) {
+        fprintf(stderr, "error: crc mismatch: recv: %u expected: %u\n", ntohl(crc_net), crc_calc);
         return -1;
     }
 
@@ -117,7 +121,7 @@ void packet_dedup_init(packet_dedup_t *cache) {
 }
 
 static inline uint64_t timespec_to_ns(const struct timespec *ts) {
-    return (uint64_t)ts->tv_sec * 1000000000ULL + (uint64_t)ts->tv_nsec;
+    return (uint64_t)ts->tv_sec * NSEC_PER_SEC + (uint64_t)ts->tv_nsec;
 }
 
 int packet_dedup_should_drop(packet_dedup_t *cache, const uint8_t mac[ETH_ALEN],
