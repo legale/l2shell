@@ -1,5 +1,19 @@
 # Карта проекта
 
+> **Главное правило:** любые планы, изменения планов и отметки о выполнении фиксируются **только** в этом файле. Если появился новый пункт плана — добавляем его сюда, завершили шаг — ставим отметку `[x]` напротив соответствующей строки.
+
+> **Второе правило:** Мы пишем надежный код на си, поэтому стараемся использовать power of ten rules NASA:
+1. Avoid complex flow constructs, such as goto and recursion.
+1. All loops must have fixed bounds. This prevents runaway code.
+1. Avoid heap memory allocation after initialization.
+1. Restrict functions to a single printed page.
+1. Use a minimum average of two runtime assertions per function.
+1. Restrict the scope of data to the smallest possible.
+1. Check the return value of all non-void functions, or cast to void to indicate the return value is useless.
+1. Use the preprocessor only for header files and simple macros.
+1. Limit pointer use to a single dereference, and do not use function pointers.
+1. Compile with all possible warnings active; all warnings should then be addressed before release of the software.
+
 ## Верхнеуровневая структура
 - `Makefile` — собирает два бинарника: `a` (сервер) и `b` (клиент); цель `all` также делает статические варианты.
 - `server.c` — реализация L2-сервера: создает PTY с указанной командой и прокидывает байты через Ethernet.
@@ -7,6 +21,7 @@
 - `common.c/.h` — общие типы пакетов, шифрование и контрольная сумма.
 - `README.md` — краткая инструкция по сборке и запуску.
 - `scripts/` — служебные скрипты, в т.ч. `test_local.sh` для end-to-end теста через veth.
+- `tests/` — юнит-тесты общих хелперов (`common_tests.c`, вспомогательный `test_common_shared.h`); используют легковесный раннер из корневого `test_util.h` без внешних зависимостей.
 - `test_logs/` — вывод локальных тестов.
 
 ## Общие концепции
@@ -14,6 +29,8 @@
 - Подписи `CLIENT_SIGNATURE` и `SERVER_SIGNATURE` позволяют фильтровать «свои» кадры.
 - `enc_dec` — симметричное XOR-«шифрование» с ключом на базе CRC и соли `key_magic`.
 - `calculate_checksum` пишет простую покадровую сумму в поле `crc`; перед расчетом поле очищается на обеих сторонах.
+- **Стиль кодирования**: K&R, 4 пробела на отступ, брейсы на той же строке с сигнатурой. Функции/глобальные переменные именуются `lowercase_with_underscores`. Стараемся не переносить сигнатуры и вызовы функций на две строки даже при превышении мягкого лимита в 80 символов. Любой новый код обязан следовать этим правилам и списку Power-of-Ten из начала файла. Предпочитаем `static inline` хелперы в `common.h`, а не макросы.
+- **Rule of Least Surprise**: все сообщения, предупреждения и поведение должны быть очевидными человеку, читающему вывод. Если негативный сценарий теста выводит `error`, рядом должно быть пояснение, что это ожидаемо и почему.
 
 ## Типы и вспомогательные функции
 - `packh_t`/`pack_t` — общие для клиента и сервера заголовок+payload.
@@ -54,14 +71,23 @@
 2. Сервер: `./a <iface> <команда>` (пример: `./a eth1 bash`).
 3. Клиент: `./b <iface> <mac>` (пример: `./b eth1 11:22:33:44:55:66`). Пока сервер не ответил, клиент шлет broadcast.
 
-## План рефакторинга
+## План работ
+### Активные задачи
+- [ ] Исправить использование MAC-адреса назначения в `client.c:210-217` и стартовом пакете (`client.c:352-376`): клиент обязан отправлять кадры на MAC, переданный через CLI, даже до первого ответа.
+- [ ] Перед вызовом `recvfrom` в `client.c:125-129` заполнять `socklen_t saddr_len = sizeof(*saddr)`; сейчас нулевое значение ломает прием на некоторых ядрах.
+- [ ] Переписать таймер простоя в `server.c:189-201`, чтобы `last_data_time` обновлялся только при реальных данных, иначе PTY никогда не гаснет.
+- [ ] Обрабатывать код возврата `select` в `server.c:276-294`, повторно вызывать при `EINTR` и не трогать `FD_SET`, если `select` вернул ошибку.
+### Завершенные задачи
+- [x] Настроить `make test-unit` на использование встроенного `test_util.h`, перенести тесты в `tests/common_tests.c`.
 - [x] Вынести сборку/парсинг пакетов в общие функции `build_packet`/`parse_packet`.
 - [x] Синхронизировать реализацию CRC и XOR в клиенте и сервере.
 - [x] Обеспечить корректный запуск PTY после первого payload без потери байтов.
 - [x] Добавить дедупликацию L2-фреймов на клиенте и сервере, чтобы мосты/широковещательные повторы не дублировали ввод.
+- [x] Научить `Makefile` собирать/запускать `make test-unit` и задокументировать запуск в `README.md`.
+- [x] Расширить `tests/common_tests.c` дополнительными сценариями (NULL-аргументы, проверки endian, негативные случаи `parse_packet`, дедуп по времени).
 
-## Тестирование
 - `sudo make test` → `scripts/test_local.sh` создает veth-пару `veth_srv0`/`veth_cli0`, запускает `./a veth_srv0 /bin/cat` и `./b veth_cli0 <mac>`, затем посылает строку `ping_over_l2shell`.
 - Скрипт сохраняет логи в `test_logs/server.log` и `test_logs/client.log`; успех определяется по наличию строки в клиентском логе.
 - Нужны root-права (или CAP_NET_RAW) для создания veth и открытия raw-сокетов.
 - Скрипт сам удаляет интерфейсы и процессы в `trap cleanup`, поэтому его можно повторно запускать без ручной уборки.
+- `make test-unit` — сборка/запуск юнит-тестов `tests/common_tests.c`, использующих встроенный раннер `test_util.h` (внешние зависимости не требуются). В логах появились строки `error: payload size too large` и `error: crc mismatch` — это ожидаемые ветки негативных тестов, а не падения.

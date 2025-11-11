@@ -28,4 +28,9 @@ This will connect client to the server machine with mac `11:22:33:44:55:66`
 
 By default the client disables local echo for a clean remote shell. Append `--local-echo` if you explicitly need to see your keystrokes locally.
 
+## тестирование
+Юнит-тесты для общих хелперов (CRC, упаковка кадров, дедупликация) живут в `tests/` и используют легковесный раннер из корневого `test_util.h`, поэтому никаких внешних библиотек не требуется. В консоли появятся строки вида `error: payload size too large` и `error: crc mismatch` — это часть негативных сценариев, а не фейлы:
 
+```sh
+make test-unit
+```
