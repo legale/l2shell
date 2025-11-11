@@ -18,12 +18,12 @@
 #define PACKET_DEDUP_WINDOW_NS 5000000ULL
 
 // unit conversion macros
-#ifndef NS_PER_USEC
-#define NS_PER_USEC 1000U
+#ifndef NSEC_PER_USEC
+#define NSEC_PER_USEC 1000U
 #endif
 
-#ifndef USEC_PER_MS
-#define USEC_PER_MS 1000U
+#ifndef USEC_PER_MSEC
+#define USEC_PER_MSEC 1000U
 #endif
 
 #ifndef MSEC_PER_SEC
@@ -31,11 +31,11 @@
 #endif
 
 #ifndef NSEC_PER_MSEC
-#define NSEC_PER_MSEC (USEC_PER_MS * NS_PER_USEC)
+#define NSEC_PER_MSEC (USEC_PER_MSEC * NSEC_PER_USEC)
 #endif
 
 #ifndef USEC_PER_SEC
-#define USEC_PER_SEC (MSEC_PER_SEC * USEC_PER_MS)
+#define USEC_PER_SEC (MSEC_PER_SEC * USEC_PER_MSEC)
 #endif
 
 #ifndef NSEC_PER_SEC

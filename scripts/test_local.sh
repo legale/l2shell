@@ -76,13 +76,13 @@ SERVER_MAC="$(cat /sys/class/net/${SERVER_IF}/address)"
 log "Server MAC detected: ${SERVER_MAC}"
 
 log "Launching server ./a on ${SERVER_IF}"
-./a "${SERVER_IF}" /bin/bash >"${SERVER_LOG}" 2>&1 &
+./a "${SERVER_IF}" >"${SERVER_LOG}" 2>&1 &
 SERVER_PID=$!
 sleep 1
 
 log "Running client ./b on ${CLIENT_IF} to send 'echo 123'"
 set +e
-./b "${CLIENT_IF}" "${SERVER_MAC}" "echo 123" >"${CLIENT_LOG}" 2>&1
+./b "${CLIENT_IF}" "${SERVER_MAC}" /bin/bash "echo 123" >"${CLIENT_LOG}" 2>&1
 CLIENT_RC=$?
 set -e
 

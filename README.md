@@ -13,26 +13,26 @@ make
 
 ## usage
 ### server
-Start a server on a machine 1.
+Start a server on machine 1 (no command argument needed).
 ```sh
-./a eth1 bash
+./a eth1
 ```
-This will start an l2shell server with bash as cli
+The server waits for the first client frame, reads the requested command from its payload, and launches it (defaults to `/bin/sh` if the client keeps the default).
 
 ### client
 Start a client on a machine 2.
 ```sh
-./b eth1 11:22:33:44:55:66
+./b eth1 11:22:33:44:55:66 /bin/bash
 ```
-This will connect client to the server machine with mac `11:22:33:44:55:66`
+This connects the client to the server machine with MAC `11:22:33:44:55:66` and asks it to spawn `/bin/bash` as the interactive shell.
 
 By default the client disables local echo for a clean remote shell. Append `--local-echo` if you explicitly need to see your keystrokes locally.
 
-To send a one-off command without opening an interactive session:
+To send a one-off command after the session is up (and exit once the response arrives):
 ```sh
-./b eth1 11:22:33:44:55:66 "echo 123"
+./b eth1 11:22:33:44:55:66 /bin/bash "echo 123"
 ```
-The client will push the command followed by a newline, print the remote output, and exit once the response arrives (used by the bridge test harness).
+The client first establishes the remote shell (`/bin/bash`), pushes the command followed by a newline, prints the remote output, and exits once the response arrives (used by the bridge test harness).
 
 ## тестирование
 Юнит-тесты для общих хелперов (CRC, упаковка кадров, дедупликация) живут в `tests/` и используют легковесный раннер из корневого `test_util.h`, поэтому никаких внешних библиотек не требуется. В консоли появятся строки вида `error: payload size too large` и `error: crc mismatch` — это часть негативных сценариев, а не фейлы:

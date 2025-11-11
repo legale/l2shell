@@ -32,6 +32,9 @@ volatile sig_atomic_t pid = -1;
 static packet_dedup_t server_rx_dedup;
 static time_t last_data_time = 0;
 
+static void start_command_process(const char *command);
+static int launch_remote_command(const unsigned char *payload, size_t payload_size);
+
 ssize_t write_all(int fd, const void *buf, size_t count) {
     const char *ptr = (const char *)buf;
     size_t remaining = count;
@@ -109,14 +112,39 @@ ssize_t handle_client_read(int sockfd, pack_t *packet, struct sockaddr_ll *saddr
         return payload_size;
     }
 
-    if (payload_size > 0) {
-        if (sh_fd != -1) {
-            write_all(sh_fd, packet->payload, (size_t)payload_size);
+    if (sh_fd == -1) {
+        if (launch_remote_command(packet->payload, (size_t)payload_size) != 0) {
+            fprintf(stderr, "error: failed to launch remote command\n");
         }
+        return payload_size;
+    }
+
+    if (write_all(sh_fd, packet->payload, (size_t)payload_size) > 0) {
         last_data_time = time(NULL);
     }
 
     return payload_size;
+}
+
+static int launch_remote_command(const unsigned char *payload, size_t payload_size) {
+    if (payload_size == 0) {
+        fprintf(stderr, "error: empty remote command payload\n");
+        return -1;
+    }
+    if (payload_size > MAX_PAYLOAD_SIZE) {
+        fprintf(stderr, "error: remote command too long (%zu bytes)\n", payload_size);
+        return -1;
+    }
+    char command[MAX_PAYLOAD_SIZE + 1];
+    memcpy(command, payload, payload_size);
+    command[payload_size] = '\0';
+    if (command[0] == '\0') {
+        fprintf(stderr, "error: remote command payload null\n");
+        return -1;
+    }
+    start_command_process(command);
+    last_data_time = time(NULL);
+    return 0;
 }
 
 // Функция для обработки чтения и записи данных в клиент
@@ -160,7 +188,7 @@ void handle_client_write(int sockfd, int sh_fd, pack_t *packet,
 }
 
 // Функция для запуска процесса команды
-void start_command_process(char *command) {
+static void start_command_process(const char *command) {
     pid = forkpty(&sh_fd, NULL, NULL, NULL);
     if (pid == 0) {
         execlp(command, command, NULL);
@@ -206,13 +234,12 @@ void check_command_termination() {
 }
 
 int main(int argc, char *argv[]) {
-    if (argc < 3) {
-        fprintf(stderr, "Usage: %s <interface> <command>\n", argv[0]);
+    if (argc < 2) {
+        fprintf(stderr, "Usage: %s <interface>\n", argv[0]);
         return 1;
     }
 
     char *interface = argv[1];
-    char *command = argv[2];
     int sockfd;
     struct sockaddr_ll saddr = {0};
     pack_t packet = {0};
@@ -287,15 +314,7 @@ int main(int argc, char *argv[]) {
         check_command_termination();
 
         if (FD_ISSET(sockfd, &fds)) {
-            ssize_t packet_len = handle_client_read(sockfd, &packet, &saddr, &ifr);
-            if (packet_len > 0 && sh_fd == -1) {
-                start_command_process(command);
-                if (sh_fd != -1) {
-                    // Reinject the payload that triggered the session start so it
-                    // reaches the newly spawned shell instead of being dropped.
-                    write_all(sh_fd, packet.payload, packet_len);
-                }
-            }
+            handle_client_read(sockfd, &packet, &saddr, &ifr);
         }
 
         if (sh_fd != -1 && FD_ISSET(sh_fd, &fds)) {
