@@ -30,7 +30,6 @@
 int sh_fd = -1;
 volatile sig_atomic_t pid = -1;
 static packet_dedup_t server_rx_dedup;
-static time_t last_data_time = 0;
 
 static void start_command_process(const char *command);
 static int launch_remote_command(const unsigned char *payload, size_t payload_size);
@@ -66,23 +65,23 @@ ssize_t write_all(int fd, const void *buf, size_t count) {
     return count;
 }
 
+
 // Функция для обработки чтения данных от клиента и отправки их в команду
 ssize_t handle_client_read(int sockfd, pack_t *packet, struct sockaddr_ll *saddr, struct ifreq *ifr) {
 
     socklen_t saddr_len = sizeof(struct sockaddr_ll);
     struct sockaddr_ll saddr_tmp = {0};
     ssize_t ret = recvfrom(sockfd, packet, sizeof(pack_t), 0, (struct sockaddr *)&saddr_tmp, &saddr_len);
-
+    debug_dump_frame("debug: server rx frame", (const uint8_t *)packet, (size_t)ret);
     if (ret <= 0) {
         return ret;
     }
 
     packh_t *header = (packh_t *)packet;
+    int payload_size = -1;
 
     // Добавляем проверку MAC-адреса получателя
-    // Пакет должен быть или широковещательным или предназначен нашему интерфейсу
-    if (memcmp(header->eth_hdr.ether_dhost, broadcast_mac, ETH_ALEN) != 0 &&
-        memcmp(header->eth_hdr.ether_dhost, ifr->ifr_hwaddr.sa_data, ETH_ALEN) != 0) {
+    if (memcmp(header->eth_hdr.ether_dhost, ifr->ifr_hwaddr.sa_data, ETH_ALEN) != 0) {
         return -1;
     }
 
@@ -107,22 +106,30 @@ ssize_t handle_client_read(int sockfd, pack_t *packet, struct sockaddr_ll *saddr
     // Копируем saddr, поскольку это правильный отправитель
     memcpy(saddr, &saddr_tmp, saddr_len);
 
-    int payload_size = parse_packet(packet, ret, CLIENT_SIGNATURE);
-    if (payload_size <= 0) {
+    payload_size = parse_packet(packet, ret, CLIENT_SIGNATURE);
+    if (payload_size < 0) {
         return payload_size;
     }
 
+    // проверяем, запущен ли удаленный шелл
     if (sh_fd == -1) {
-        if (launch_remote_command(packet->payload, (size_t)payload_size) != 0) {
+        // если нет, запускаем его с командой из полезной нагрузки
+        const unsigned char *cmd_payload = packet->payload;
+        size_t cmd_size = (size_t)payload_size;
+        // если пейлод пустой или содержит только '\n' — используем дефолтную команду "sh"
+        if (cmd_size == 0 || (cmd_size == 1 && packet->payload[0] == '\n')) {
+            static const unsigned char default_cmd[] = "sh";
+            cmd_payload = default_cmd;
+            cmd_size = sizeof(default_cmd) - 1;
+        }
+        if (launch_remote_command(cmd_payload, cmd_size) != 0) {
             fprintf(stderr, "error: failed to launch remote command\n");
         }
         return payload_size;
     }
-
+    // отправляем полезную нагрузку в шел, если он уже работает
     if (write_all(sh_fd, packet->payload, (size_t)payload_size) > 0) {
-        last_data_time = time(NULL);
     }
-
     return payload_size;
 }
 
@@ -143,7 +150,6 @@ static int launch_remote_command(const unsigned char *payload, size_t payload_si
         return -1;
     }
     start_command_process(command);
-    last_data_time = time(NULL);
     return 0;
 }
 
@@ -156,7 +162,6 @@ void handle_client_write(int sockfd, int sh_fd, pack_t *packet,
     // Проверка успешности чтения из sh_fd
     if (ret <= 0) return; // Если чтение не удалось, выходим
 
-    last_data_time = time(NULL);
 
     int packet_len = build_packet(packet, (size_t)ret, (uint8_t *)ifr->ifr_hwaddr.sa_data,
                                   (uint8_t *)saddr->sll_addr, SERVER_SIGNATURE);
@@ -187,7 +192,6 @@ void handle_client_write(int sockfd, int sh_fd, pack_t *packet,
     }
 }
 
-// Функция для запуска процесса команды
 static void start_command_process(const char *command) {
     pid = forkpty(&sh_fd, NULL, NULL, NULL);
     if (pid == 0) {
@@ -202,7 +206,7 @@ static void start_command_process(const char *command) {
     printf("started proc with pid: %d\n", pid);
 }
 
-#define TIMEOUT 10
+#define TIMEOUT 3
 
 // Функция для завершения процесса команды
 void check_command_termination() {
@@ -215,20 +219,7 @@ void check_command_termination() {
             close(sh_fd);
             sh_fd = -1;
             pid = -1;
-            last_data_time = 0;
             return;
-        }
-
-        if (last_data_time) {
-            time_t current_time = time(NULL);
-            if (difftime(current_time, last_data_time) >= TIMEOUT) {
-                printf("No data received for 10 seconds. Terminating session.\n");
-                kill(current_pid, SIGTERM); // Завершение процесса
-                close(sh_fd);
-                sh_fd = -1;
-                pid = -1;
-                last_data_time = 0;
-            }
         }
     }
 }
@@ -253,8 +244,8 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // int flags = fcntl(sockfd, F_GETFL, 0);
-    // fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
+    int flags = fcntl(sockfd, F_GETFL, 0);
+    fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
 
     struct timeval tv;
     tv.tv_sec = 1;
@@ -291,35 +282,37 @@ int main(int argc, char *argv[]) {
     }
 
     fd_set fds;
+
+    int no_data_cnt = 0;
     while (1) {
+        struct timeval tv;
         FD_ZERO(&fds);
         FD_SET(sockfd, &fds);
-        if (sh_fd != -1) {
-            FD_SET(sh_fd, &fds);
-        }
+        if (sh_fd != -1) FD_SET(sh_fd, &fds);
         int max_fd = (sh_fd > sockfd) ? sh_fd : sockfd;
 
-        int ready = select(max_fd + 1, &fds, NULL, NULL, NULL);
+        tv.tv_sec = 1;
+        tv.tv_usec = 0;
+
+        int ready = select(max_fd + 1, &fds, NULL, NULL, &tv);
         if (ready < 0) {
-            if (errno == EINTR) {
-                continue;
-            }
+            if (errno == EINTR) continue;
             perror("select");
             continue;
         }
-        if (ready == 0) {
+
+        /* tick even on timeout */
+        check_command_termination();
+        if (ready == 0){
+            if(no_data_cnt++ > TIMEOUT){
+                exit(0);
+            }
             continue;
         }
+        no_data_cnt = 0;
 
-        check_command_termination();
-
-        if (FD_ISSET(sockfd, &fds)) {
-            handle_client_read(sockfd, &packet, &saddr, &ifr);
-        }
-
-        if (sh_fd != -1 && FD_ISSET(sh_fd, &fds)) {
-            handle_client_write(sockfd, sh_fd, &packet2, &saddr, &ifr);
-        }
+        if (FD_ISSET(sockfd, &fds)) handle_client_read(sockfd, &packet, &saddr, &ifr);
+        if (sh_fd != -1 && FD_ISSET(sh_fd, &fds)) handle_client_write(sockfd, sh_fd, &packet2, &saddr, &ifr);
     }
 
     close(sockfd);

@@ -24,7 +24,11 @@ Start a client on a machine 2.
 ```sh
 ./b eth1 11:22:33:44:55:66 /bin/bash
 ```
-This connects the client to the server machine with MAC `11:22:33:44:55:66` and asks it to spawn `/bin/bash` as the interactive shell.
+This connects the client to the server machine with MAC `11:22:33:44:55:66` and asks it to spawn `/bin/bash` as the interactive shell. If the remote side already has a shell running (for example, it was triggered earlier via the kernel module), append `--skip-init` to avoid sending a new init frame:
+
+```sh
+./b eth1 11:22:33:44:55:66 --skip-init
+```
 
 By default the client disables local echo for a clean remote shell. Append `--local-echo` if you explicitly need to see your keystrokes locally.
 

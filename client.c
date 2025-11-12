@@ -54,7 +54,6 @@ typedef struct client_ctx {
 } client_ctx_t;
 
 static unsigned char dst_mac[ETH_ALEN];
-static void debug_dump_frame(const char *prefix, const uint8_t *data, size_t len);
 
 static void restore_tty(client_ctx_t *ctx) {
     if (!ctx->tty_saved) return;
@@ -149,32 +148,26 @@ static int init_socket(client_ctx_t *ctx, const char *iface) {
 
 // Отправка пакета с заданным MAC-адресом назначения
 static int send_packet(client_ctx_t *ctx, pack_t *packet, size_t payload_len, const unsigned char *dst_mac) {
-    memcpy(packet->header.eth_hdr.ether_shost, ctx->ifr.ifr_hwaddr.sa_data, ETH_ALEN);
-    memcpy(packet->header.eth_hdr.ether_dhost, dst_mac, ETH_ALEN);
+    uint8_t src_mac[ETH_ALEN];
+    memcpy(src_mac, ctx->ifr.ifr_hwaddr.sa_data, ETH_ALEN);
+
     ctx->saddr.sll_family = AF_PACKET;
     memcpy(ctx->saddr.sll_addr, dst_mac, ETH_ALEN);
 
-    size_t frame_len = sizeof(packh_t) + payload_len;
-    packet->header.eth_hdr.ether_type = htons(ETHER_TYPE_CUSTOM);
-    packet->header.signature = htonl(CLIENT_SIGNATURE);
-    packet->header.payload_size = htonl((uint32_t)payload_len);
-    packet->header.crc = 0;
-    uint32_t crc = calculate_checksum((const unsigned char *)packet, frame_len);
-    packet->header.crc = htonl(crc);
-
-    if (payload_len > 0) {
-        enc_dec(packet->payload, packet->payload, (uint8_t *)&packet->header.crc, payload_len);
+    int frame_len = build_packet(packet, payload_len, src_mac, dst_mac, CLIENT_SIGNATURE);
+    if (frame_len < 0) {
+        fprintf(stderr, "build_packet failed\n");
+        return -1;
     }
 
-    debug_dump_frame("debug: client tx frame", (const uint8_t *)packet, frame_len);
+    debug_dump_frame("debug: client tx frame", (const uint8_t *)packet, (size_t)frame_len);
 
-    if (sendto(ctx->sockfd, packet, frame_len, 0, (struct sockaddr *)&ctx->saddr, sizeof(ctx->saddr)) < 0) {
+    if (sendto(ctx->sockfd, packet, (size_t)frame_len, 0, (struct sockaddr *)&ctx->saddr, sizeof(ctx->saddr)) < 0) {
         perror("sendto");
         return -1;
     }
     return 0;
 }
-
 // Отправка начального кадра с удаленной командой
 static int send_init_frame(client_ctx_t *ctx, const char *remote_cmd) {
     pack_t packet = {0};
@@ -226,15 +219,17 @@ static void handle_socket_rx(client_ctx_t *ctx) {
     ssize_t ret = recvfrom(ctx->sockfd, &packet, sizeof(packet), 0, (struct sockaddr *)&peer, &peer_len);
     if (ret <= 0) return;
 
-    packh_t *hdr = &packet.header;
-    if (ntohs(hdr->eth_hdr.ether_type) != ETHER_TYPE_CUSTOM) return;
-    if (ntohl(hdr->signature) != SERVER_SIGNATURE) return;
+    int payload_size = parse_packet(&packet, ret, SERVER_SIGNATURE);
+    if (payload_size < 0) {
+        return;
+    }
 
-    uint32_t payload_size = ntohl(hdr->payload_size);
+    packh_t *hdr = &packet.header;
+    uint32_t crc_host = ntohl(hdr->crc);
     if (packet_dedup_should_drop(&ctx->rx_dedup,
                                  (uint8_t *)hdr->eth_hdr.ether_shost,
-                                 ntohl(hdr->crc),
-                                 payload_size,
+                                 crc_host,
+                                 (uint32_t)payload_size,
                                  ntohl(hdr->signature),
                                  PACKET_DEDUP_WINDOW_NS)) {
         return;
@@ -247,22 +242,9 @@ static void handle_socket_rx(client_ctx_t *ctx) {
         print_server_mac(ctx->server_mac);
     }
 
-    enc_dec(packet.payload, packet.payload, (uint8_t *)&hdr->crc, payload_size);
-    uint32_t crc_net = hdr->crc;
-    hdr->crc = 0;
-    uint32_t crc_calc = calculate_checksum((const unsigned char *)&packet, (size_t)ret);
-    hdr->crc = crc_net;
-    if (ntohl(crc_net) != crc_calc) {
-        fprintf(stderr, "error: crc mismatch: recv=%u expected=%u\n", ntohl(crc_net), crc_calc);
-        return;
+    if (payload_size > 0) {
+        write(STDOUT_FILENO, packet.payload, (size_t)payload_size);
     }
-
-    if (payload_size > MAX_PAYLOAD_SIZE) {
-        fprintf(stderr, "error: payload too large: %u\n", payload_size);
-        return;
-    }
-
-    write(STDOUT_FILENO, packet.payload, payload_size);
 
     if (ctx->send_command_mode && payload_size > 0) {
         ctx->response_seen = 1;
@@ -444,23 +426,4 @@ int main(int argc, char **argv) {
     restore_tty(&ctx);
     close(ctx.sockfd);
     return 0;
-}
-
-static void debug_dump_frame(const char *prefix, const uint8_t *data, size_t len) {
-    if (!data || !len) return;
-
-    FILE *log_file = fopen("client.log", "a");
-    if (!log_file) return;
-
-    fprintf(log_file, "%s len=%zu\n", prefix, len);
-    for (size_t i = 0; i < len; i += 16) {
-        fprintf(log_file, "%04zx:", i);
-        size_t line_end = (i + 16 < len) ? i + 16 : len;
-        for (size_t j = i; j < line_end; ++j) {
-            fprintf(log_file, " %02x", data[j]);
-        }
-        fputc('\n', log_file);
-    }
-
-    fclose(log_file);
 }

@@ -10,6 +10,7 @@
 #define BLOCK_SIZE 4
 
 static const uint8_t key_magic[BLOCK_SIZE] = {4, 1, 2, 3};
+static const uint8_t zero_key[BLOCK_SIZE] = {0, 0, 0, 0};
 
 const unsigned char broadcast_mac[ETH_ALEN] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
@@ -39,14 +40,10 @@ uint32_t calculate_checksum(const unsigned char *data, size_t len) {
 
 int build_packet(pack_t *packet, size_t payload_size, const uint8_t src_mac[ETH_ALEN],
                  const uint8_t dst_mac[ETH_ALEN], uint32_t signature) {
-    if (!packet || !src_mac || !dst_mac) {
-        return -1;
-    }
-    if (payload_size > MAX_PAYLOAD_SIZE) {
-        fprintf(stderr, "error: payload size too large: %zu\n", payload_size);
-        return -1;
-    }
+    if (!packet || !src_mac || !dst_mac) return -1;
+    if (payload_size > MAX_PAYLOAD_SIZE) return -1;
 
+    /* fill header */
     packet->header.eth_hdr.ether_type = htons(ETHER_TYPE_CUSTOM);
     memcpy(packet->header.eth_hdr.ether_shost, src_mac, ETH_ALEN);
     memcpy(packet->header.eth_hdr.ether_dhost, dst_mac, ETH_ALEN);
@@ -54,10 +51,22 @@ int build_packet(pack_t *packet, size_t payload_size, const uint8_t src_mac[ETH_
     packet->header.payload_size = htonl((uint32_t)payload_size);
     packet->header.crc = 0;
 
+    /* encrypt first, using provisional key = 0 (stable step) */
+    if (payload_size > 0) {
+        /* key is final crc bytes; to make deterministic we do two-pass:
+         * pass1: encrypt with zero key to stabilize plaintext-dependent crc
+         */
+        enc_dec(packet->payload, packet->payload, zero_key, payload_size);
+    }
+
+    /* crc over header(with crc=0) + encrypted payload */
     size_t frame_len = sizeof(packh_t) + payload_size;
     uint32_t crc = calculate_checksum((const uint8_t *)packet, frame_len);
+
+    /* write crc */
     packet->header.crc = htonl(crc);
 
+    /* re-encrypt with final key so both sides share same rule */
     if (payload_size > 0) {
         enc_dec(packet->payload, packet->payload, (const uint8_t *)&packet->header.crc, payload_size);
     }
@@ -66,50 +75,39 @@ int build_packet(pack_t *packet, size_t payload_size, const uint8_t src_mac[ETH_
 }
 
 int parse_packet(pack_t *packet, ssize_t frame_len, uint32_t expected_signature) {
-    if (!packet || frame_len < (ssize_t)sizeof(packh_t)) {
-        return -1;
-    }
+    if (!packet || frame_len < (ssize_t)sizeof(packh_t)) return -1;
 
     size_t len = (size_t)frame_len;
-    packh_t *header = &packet->header;
+    packh_t *h = &packet->header;
 
-    // Проверяем тип протокола
-    if (ntohs(header->eth_hdr.ether_type) != ETHER_TYPE_CUSTOM) {
-        return -1;
-    }
+    if (ntohs(h->eth_hdr.ether_type) != ETHER_TYPE_CUSTOM) return -1;
+    if (ntohl(h->signature) != expected_signature) return -1;
 
-    // Проверяем сигнатуру пакета
-    if (ntohl(header->signature) != expected_signature) {
-        return -1;
-    }
-
-    // Проверяем размер полезной нагрузки
-    uint32_t payload_size = ntohl(header->payload_size);
-    if (payload_size > MAX_PAYLOAD_SIZE) {
-        fprintf(stderr, "error: payload size too large: %u\n", payload_size);
-        return -1;
-    }
+    uint32_t payload_size = ntohl(h->payload_size);
+    if (payload_size > MAX_PAYLOAD_SIZE) return -1;
 
     size_t expected_len = sizeof(packh_t) + payload_size;
-    // Проверяем, что пакет не усечен
-    if (len < expected_len) {
-        fprintf(stderr, "error: truncated packet: have=%zu expected=%zu\n", len, expected_len);
-        return -1;
-    }
-    // Расшифровываем полезную нагрузку
+    if (len < expected_len) return -1;
+
+    uint32_t crc_net = h->crc;
+    uint32_t crc_host = ntohl(crc_net);
+
     if (payload_size > 0) {
-        enc_dec(packet->payload, packet->payload, (const uint8_t *)&packet->header.crc, payload_size);
+        enc_dec(packet->payload, packet->payload, (const uint8_t *)&crc_net, payload_size);
     }
 
-    uint32_t crc_net = header->crc;
-    header->crc = 0;
+    h->crc = 0;
     uint32_t crc_calc = calculate_checksum((const uint8_t *)packet, expected_len);
-    header->crc = crc_net;
+    h->crc = crc_net;
 
-    // Проверяем CRC
-    if (ntohl(crc_net) != crc_calc) {
-        fprintf(stderr, "error: crc mismatch: recv: %u expected: %u\n", ntohl(crc_net), crc_calc);
+    if (crc_host != crc_calc) {
+        fprintf(stderr, "error: crc mismatch: recv=%u calc=%u\n",
+                crc_host, crc_calc);
         return -1;
+    }
+
+    if (payload_size > 0) {
+        enc_dec(packet->payload, packet->payload, zero_key, payload_size);
     }
 
     return (int)payload_size;
@@ -160,4 +158,23 @@ int packet_dedup_should_drop(packet_dedup_t *cache, const uint8_t mac[ETH_ALEN],
 
     cache->cursor = (cache->cursor + 1) % PACKET_DEDUP_CACHE;
     return 0;
+}
+
+void debug_dump_frame(const char *prefix, const uint8_t *data, size_t len) {
+    if (!data || !len) return;
+
+    FILE *log_file = fopen("clientserver.log", "a");
+    if (!log_file) return;
+
+    fprintf(log_file, "%s len=%zu\n", prefix, len);
+    for (size_t i = 0; i < len; i += 16) {
+        fprintf(log_file, "%04zx:", i);
+        size_t line_end = (i + 16 < len) ? i + 16 : len;
+        for (size_t j = i; j < line_end; ++j) {
+            fprintf(log_file, " %02x", data[j]);
+        }
+        fputc('\n', log_file);
+    }
+
+    fclose(log_file);
 }

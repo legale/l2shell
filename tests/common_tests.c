@@ -157,6 +157,10 @@ static void test_build_packet_sets_fields(void) {
 
     pack_t decrypted = packet;
     enc_dec(decrypted.payload, decrypted.payload, (uint8_t *)&packet.header.crc, payload_len);
+    if (payload_len > 0) {
+        uint32_t zero_key = 0;
+        enc_dec(decrypted.payload, decrypted.payload, (uint8_t *)&zero_key, payload_len);
+    }
     TEST_ASSERT_MEMEQ(decrypted.payload, payload, payload_len);
     PRINT_TEST_PASSED();
 }

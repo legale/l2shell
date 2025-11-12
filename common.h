@@ -77,4 +77,6 @@ int parse_packet(pack_t *packet, ssize_t frame_len, uint32_t expected_signature)
 void packet_dedup_init(packet_dedup_t *cache);
 int packet_dedup_should_drop(packet_dedup_t *cache, const uint8_t mac[ETH_ALEN], uint32_t crc, uint32_t payload_size, uint32_t signature, uint64_t window_ns);
 
+void debug_dump_frame(const char *prefix, const uint8_t *data, size_t len);
+
 #endif // COMMON_H
