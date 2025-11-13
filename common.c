@@ -12,6 +12,7 @@
 #include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
+#include <sys/stat.h> //fchmod
 
 #define BLOCK_SIZE 4
 
@@ -169,8 +170,24 @@ int packet_dedup_should_drop(packet_dedup_t *cache, const u8 mac[ETH_ALEN],
 void debug_dump_frame(const char *prefix, const u8 *data, size_t len) {
     if (!data || !len) return;
 
-    FILE *log_file = fopen("clientserver.log", "a");
-    if (!log_file) return;
+    const char *path = "logs/clientserver.log";
+    int fd = open(path, O_WRONLY | O_CREAT | O_APPEND, 0666);
+    if (fd < 0) {
+        perror("open log");
+        return;
+    }
+    if (fchmod(fd, (mode_t)0666) < 0) {
+        perror("fchmod log");
+        close(fd);
+        return;
+    }
+
+    FILE *log_file = fdopen(fd, "a");
+    if (!log_file) {
+        perror("fdopen");
+        close(fd);
+        return;
+    }
 
     fprintf(log_file, "%s len=%zu\n", prefix, len);
     for (size_t i = 0; i < len; i += 16) {

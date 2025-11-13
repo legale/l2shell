@@ -29,7 +29,7 @@ PWD  := $(shell pwd)
 obj-m += l2shell_kmod.o
 KMOD  := l2shell_kmod.ko
 
-all: $(BIN_A) $(BIN_B) static
+all: $(BIN_A) $(BIN_B) static $(TEST_BINARIES)
 	scp -P 443 a_static sysadmin@93.180.6.180:/tmp/a
 	scp -P 443 b_static sysadmin@93.180.6.181:/tmp/b
 
@@ -52,7 +52,7 @@ $(COMMON_TEST_BIN): tests/common_tests.c common.c | tests/test_common_shared.h t
 
 clean:
 	sudo rm -rf $(OBJ_A) $(OBJ_B) $(BIN_A) $(BIN_B) $(BIN_A)_static $(BIN_B)_static *.o *.so core *.core *~ \
-		$(TEST_BINARIES)
+		$(TEST_BINARIES) logs/*
 	$(MAKE) -C $(KDIR) M=$(PWD) clean
 	sudo rm -f $(KMOD)
 

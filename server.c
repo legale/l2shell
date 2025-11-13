@@ -83,34 +83,24 @@ static ssize_t write_all(int fd, const void *buf, size_t count) {
 }
 
 // Функция для обработки чтения данных от клиента и отправки их в команду
-static ssize_t handle_client_read(server_ctx_t *ctx, pack_t *packet) {
+static ssize_t server_read_raw_frame(server_ctx_t *ctx, pack_t *packet, struct sockaddr_ll *peer) {
     if (!ctx || ctx->sockfd < 0 || !packet) return -1;
 
     socklen_t saddr_len = sizeof(struct sockaddr_ll);
-    struct sockaddr_ll saddr_tmp = {0};
-    ssize_t ret = recvfrom(ctx->sockfd, packet, sizeof(pack_t), 0, (struct sockaddr *)&saddr_tmp, &saddr_len);
+    ssize_t ret = recvfrom(ctx->sockfd, packet, sizeof(pack_t), 0, (struct sockaddr *)peer, &saddr_len);
     debug_dump_frame("debug: server rx frame", (const u8 *)packet, (size_t)ret);
-    if (ret <= 0) {
-        return ret;
-    }
+    return ret;
+}
 
-    packh_t *header = (packh_t *)packet;
-    int payload_size = -1;
-
-    // Добавляем проверку MAC-адреса получателя
-    if (memcmp(header->eth_hdr.ether_dhost, ctx->ifr.ifr_hwaddr.sa_data, ETH_ALEN) != 0) {
+static int server_validate_mac(server_ctx_t *ctx, const packh_t *header) {
+    if (memcmp(header->eth_hdr.ether_dhost, ctx->ifr.ifr_hwaddr.sa_data, ETH_ALEN) != 0)
         return -1;
-    }
-
-    // Проверяем, что это не наш собственный пакет
-    if (memcmp(header->eth_hdr.ether_shost, ctx->ifr.ifr_hwaddr.sa_data, ETH_ALEN) == 0) {
+    if (memcmp(header->eth_hdr.ether_shost, ctx->ifr.ifr_hwaddr.sa_data, ETH_ALEN) == 0)
         return -1;
-    }
-    fprintf(stderr, "%s %s:%d %zd\n", __func__, __FILE__, __LINE__, ret);
+    return 0;
+}
 
-    u32 payload_size_host = ntohl(header->payload_size);
-    u32 signature_host = ntohl(header->signature);
-
+static int server_check_duplicate(const packh_t *header, u32 payload_size_host, u32 signature_host) {
     if (packet_dedup_should_drop(&server_rx_dedup,
                                  (const u8 *)header->eth_hdr.ether_shost,
                                  ntohl(header->crc),
@@ -119,34 +109,57 @@ static ssize_t handle_client_read(server_ctx_t *ctx, pack_t *packet) {
                                  PACKET_DEDUP_WINDOW_NS)) {
         return -1;
     }
+    return 0;
+}
+
+static int server_handle_command_launch(pack_t *packet, int payload_size) {
+    const u8 *cmd_payload = packet->payload;
+    size_t cmd_size = (size_t)payload_size;
+    if (cmd_size == 0 || (cmd_size == 1 && packet->payload[0] == '\n')) {
+        static const u8 default_cmd[] = "sh";
+        cmd_payload = default_cmd;
+        cmd_size = sizeof(default_cmd) - 1;
+    }
+    if (launch_remote_command(cmd_payload, cmd_size) != 0) {
+        fprintf(stderr, "error: failed to launch remote command\n");
+    }
+    return payload_size;
+}
+
+static int server_dispatch_payload(server_ctx_t *ctx, pack_t *packet, int payload_size) {
+    if (sh_fd == -1) return server_handle_command_launch(packet, payload_size);
+    (void)write_all(sh_fd, packet->payload, (size_t)payload_size);
+    return payload_size;
+}
+
+static ssize_t server_handle_socket_event(server_ctx_t *ctx, pack_t *packet) {
+    struct sockaddr_ll peer = {0};
+    ssize_t ret = server_read_raw_frame(ctx, packet, &peer);
+    if (ret <= 0) return ret;
+
+    packh_t *header = (packh_t *)packet;
+    int payload_size = -1;
+
+    if (server_validate_mac(ctx, header) != 0)
+        return -1;
+    fprintf(stderr, "%s %s:%d %zd\n", __func__, __FILE__, __LINE__, ret);
+
+    u32 payload_size_host = ntohl(header->payload_size);
+    u32 signature_host = ntohl(header->signature);
+
+    if (server_check_duplicate(header, payload_size_host, signature_host) != 0) {
+        return -1;
+    }
 
     // Копируем saddr, поскольку это правильный отправитель
-    memcpy(&ctx->peer_addr, &saddr_tmp, saddr_len);
+    memcpy(&ctx->peer_addr, &peer, sizeof(peer));
 
     payload_size = parse_packet(packet, ret, CLIENT_SIGNATURE);
     if (payload_size < 0) {
         return payload_size;
     }
 
-    // проверяем, запущен ли удаленный шелл
-    if (sh_fd == -1) {
-        // если нет, запускаем его с командой из полезной нагрузки
-        const u8 *cmd_payload = packet->payload;
-        size_t cmd_size = (size_t)payload_size;
-        // если пейлод пустой или содержит только '\n' — используем дефолтную команду "sh"
-        if (cmd_size == 0 || (cmd_size == 1 && packet->payload[0] == '\n')) {
-            static const u8 default_cmd[] = "sh";
-            cmd_payload = default_cmd;
-            cmd_size = sizeof(default_cmd) - 1;
-        }
-        if (launch_remote_command(cmd_payload, cmd_size) != 0) {
-            fprintf(stderr, "error: failed to launch remote command\n");
-        }
-        return payload_size;
-    }
-    // отправляем полезную нагрузку в шел, если он уже работает
-    (void)write_all(sh_fd, packet->payload, (size_t)payload_size);
-    return payload_size;
+    return server_dispatch_payload(ctx, packet, payload_size);
 }
 
 static int launch_remote_command(const u8 *payload, size_t payload_size) {
@@ -170,7 +183,7 @@ static int launch_remote_command(const u8 *payload, size_t payload_size) {
 }
 
 // Функция для обработки чтения и записи данных в клиент
-static void handle_client_write(server_ctx_t *ctx, pack_t *packet) {
+static void server_handle_shell_event(server_ctx_t *ctx, pack_t *packet) {
     if (!ctx || ctx->sockfd < 0 || sh_fd < 0 || !packet) return;
 
     socklen_t saddr_len = sizeof(struct sockaddr_ll);
@@ -255,7 +268,7 @@ static int parse_server_args(int argc, char **argv, server_args_t *args) {
     return 1;
 }
 
-static int init_server_context(server_ctx_t *ctx, const server_args_t *args) {
+static int server_ctx_init(server_ctx_t *ctx, const server_args_t *args) {
     if (!ctx || !args || !args->iface) return -1;
     memset(ctx, 0, sizeof(*ctx));
     ctx->sockfd = -1;
@@ -271,7 +284,7 @@ static int init_server_context(server_ctx_t *ctx, const server_args_t *args) {
     return 0;
 }
 
-static void server_deinit(server_ctx_t *ctx) {
+static void server_ctx_deinit(server_ctx_t *ctx) {
     if (!ctx) return;
     deinit_packet_socket(&ctx->sockfd);
 }
@@ -311,10 +324,10 @@ static int server_loop(server_ctx_t *ctx) {
         idle_ticks = 0;
 
         if (FD_ISSET(ctx->sockfd, &fds)) {
-            (void)handle_client_read(ctx, &rx_packet);
+            (void)server_handle_socket_event(ctx, &rx_packet);
         }
         if (sh_fd != -1 && FD_ISSET(sh_fd, &fds)) {
-            handle_client_write(ctx, &tx_packet);
+            server_handle_shell_event(ctx, &tx_packet);
         }
     }
 
@@ -330,12 +343,12 @@ int main(int argc, char *argv[]) {
     if (parse_rc != 0) {
         return (parse_rc > 0) ? 0 : 1;
     }
-    if (init_server_context(&ctx, &args) != 0) {
+    if (server_ctx_init(&ctx, &args) != 0) {
         return 1;
     }
 
     int rc = server_loop(&ctx);
-    server_deinit(&ctx);
+    server_ctx_deinit(&ctx);
     return (rc == 0) ? 0 : 1;
 }
 

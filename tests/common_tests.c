@@ -1,5 +1,9 @@
 #include <arpa/inet.h>
+#include <errno.h>
+#include <limits.h>
 #include <string.h>
+#include <unistd.h>
+#include <sys/stat.h>
 
 #include "common.h"
 #include "test_common_shared.h"
@@ -49,6 +53,26 @@ static void test_build_and_parse_packet(void) {
     int parsed_len = parse_packet(&parsed, frame_len, SERVER_SIGNATURE);
     TEST_ASSERT_EQ(parsed_len, (int)payload_len);
     TEST_ASSERT_MEMEQ(parsed.payload, message, payload_len);
+    PRINT_TEST_PASSED();
+}
+
+static void test_build_packet_preserves_padding(void) {
+    PRINT_TEST_START("build_packet_preserves_padding");
+    pack_t packet;
+    memset(&packet, 0xAA, sizeof(packet));
+    u8 src_mac[ETH_ALEN];
+    u8 dst_mac[ETH_ALEN];
+    const char *payload = "pad";
+    size_t payload_len = strlen(payload);
+
+    test_set_macs(src_mac, dst_mac);
+    memcpy(packet.payload, payload, payload_len);
+
+    int frame_len = build_packet(&packet, payload_len, src_mac, dst_mac, CLIENT_SIGNATURE);
+    TEST_ASSERT(frame_len > 0);
+
+    TEST_ASSERT(packet.payload[payload_len] == (u8)0xAA);
+    TEST_ASSERT(packet.payload[MAX_PAYLOAD_SIZE - 1] == (u8)0xAA);
     PRINT_TEST_PASSED();
 }
 
@@ -107,6 +131,27 @@ static void test_parse_packet_detects_crc_mismatch(void) {
     int frame_len = build_packet(&packet, payload_len, src_mac, dst_mac, CLIENT_SIGNATURE);
     TEST_ASSERT(frame_len > 0);
     packet.payload[0] ^= 0xff;
+
+    int rc = parse_packet(&packet, frame_len, CLIENT_SIGNATURE);
+    TEST_ASSERT(rc < 0);
+    PRINT_TEST_INFO("error is expected");
+    PRINT_TEST_PASSED();
+}
+
+static void test_parse_packet_rejects_length_mismatch(void) {
+    PRINT_TEST_START("parse_packet_rejects_length_mismatch");
+    pack_t packet = {0};
+    u8 src_mac[ETH_ALEN];
+    u8 dst_mac[ETH_ALEN];
+    const char *payload = "length-check";
+    size_t payload_len = strlen(payload);
+
+    test_set_macs(src_mac, dst_mac);
+    memcpy(packet.payload, payload, payload_len);
+
+    int frame_len = build_packet(&packet, payload_len, src_mac, dst_mac, CLIENT_SIGNATURE);
+    TEST_ASSERT(frame_len > 0);
+    packet.header.payload_size = htonl((u32)(payload_len + 4));
 
     int rc = parse_packet(&packet, frame_len, CLIENT_SIGNATURE);
     TEST_ASSERT(rc < 0);
@@ -229,14 +274,46 @@ static void test_dedup_null_args(void) {
     PRINT_TEST_PASSED();
 }
 
+static void test_debug_dump_frame_logs_prefix(void) {
+    PRINT_TEST_START("debug_dump_frame_logs_prefix");
+    const char *log_dir = "logs";
+    const char *log_path = "logs/clientserver.log";
+    (void)mkdir(log_dir, 0777);
+    remove(log_path);
+
+    u8 data[8] = {0, 1, 2, 3, 4, 5, 6, 7};
+    debug_dump_frame("test-prefix", data, sizeof(data));
+
+    FILE *f = fopen(log_path, "r");
+    if (!f) {
+        char cwd[PATH_MAX] = {0};
+        if (!getcwd(cwd, sizeof(cwd))) {
+            strncpy(cwd, "<unknown>", sizeof(cwd) - 1);
+        }
+        fprintf(stderr, "fopen clientserver.log errno=%d cwd=%s\n", errno, cwd);
+        fflush(stderr);
+    }
+    TEST_ASSERT(f != NULL);
+
+    char line[128] = {0};
+    TEST_ASSERT(fgets(line, sizeof(line), f) != NULL);
+    fclose(f);
+
+    TEST_ASSERT(strstr(line, "test-prefix") != NULL);
+    TEST_ASSERT(strstr(line, "len=8") != NULL);
+    PRINT_TEST_PASSED();
+}
+
 int main(int argc, char **argv) {
     const struct test_entry tests[] = {
         {"enc_dec_roundtrip", test_enc_dec_roundtrip},
         {"build_and_parse_packet", test_build_and_parse_packet},
+        {"build_packet_preserves_padding", test_build_packet_preserves_padding},
         {"parse_rejects_signature_mismatch", test_parse_rejects_signature_mismatch},
         {"packet_dedup_cache", test_packet_dedup_cache},
         {"build_packet_rejects_large_payload", test_build_packet_rejects_large_payload},
         {"parse_packet_detects_crc_mismatch", test_parse_packet_detects_crc_mismatch},
+        {"parse_packet_rejects_length_mismatch", test_parse_packet_rejects_length_mismatch},
         {"dedup_accepts_different_crc", test_dedup_accepts_different_crc},
         {"build_packet_null_args", test_build_packet_null_args},
         {"build_packet_sets_fields", test_build_packet_sets_fields},
@@ -245,6 +322,7 @@ int main(int argc, char **argv) {
         {"parse_packet_payload_too_large", test_parse_packet_payload_too_large},
         {"dedup_expired_entry", test_dedup_expired_entry},
         {"dedup_null_args", test_dedup_null_args},
+        {"debug_dump_frame_logs_prefix", test_debug_dump_frame_logs_prefix},
     };
 
     const char *filter = (argc > 1) ? argv[1] : NULL;

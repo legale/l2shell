@@ -50,8 +50,10 @@ typedef struct {
     int local_echo;
 } client_ctx_t;
 
-//forward declarations
+// forward declarations
 static void usage(const char *p);
+static int client_ctx_init(client_ctx_t *ctx, const client_args_t *args);
+static void client_ctx_deinit(client_ctx_t *ctx);
 
 /* time helpers */
 static u64 mono_ns(void) {
@@ -87,6 +89,29 @@ static int init_client_sock(client_ctx_t *ctx, const char *iface) {
     return 0;
 }
 
+static void client_ctx_deinit(client_ctx_t *ctx) {
+    if (!ctx) return;
+    deinit_packet_socket(&ctx->sockfd);
+}
+
+static int client_ctx_init(client_ctx_t *ctx, const client_args_t *args) {
+    if (!ctx || !args || !args->iface || !args->mac_str) return -1;
+    memset(ctx, 0, sizeof(*ctx));
+    ctx->sockfd = -1;
+    ctx->local_echo = args->local_echo;
+
+    if (a2mac(args->mac_str, ctx->server_mac) < 0) {
+        fprintf(stderr, "error: invalid mac format: %s\n", args->mac_str);
+        return -1;
+    }
+
+    if (init_client_sock(ctx, args->iface) != 0) {
+        client_ctx_deinit(ctx);
+        return -1;
+    }
+    return 0;
+}
+
 /* crlf normalize for stdin */
 static void norm_in(u8 *buf, size_t len) {
     for (size_t i = 0; i < len; i++)
@@ -94,75 +119,100 @@ static void norm_in(u8 *buf, size_t len) {
             buf[i] = '\r';
 }
 
-/* single recv path: parse, filter, print
-   returns 1 on valid server payload printed, 0 otherwise, -1 on fatal */
 static int recv_once_and_print(client_ctx_t *ctx) {
     pack_t pack;
     struct sockaddr_ll peer;
     socklen_t plen = sizeof(peer);
-    ssize_t got = recvfrom(ctx->sockfd, &pack, sizeof(pack), 0,
-                           (struct sockaddr *)&peer, &plen);
+    ssize_t got = recvfrom(ctx->sockfd, &pack, sizeof(pack), 0, (struct sockaddr *)&peer, &plen);
     if (got < 0) {
         if (errno == EINTR || errno == EAGAIN)
             return 0;
         perror("recvfrom");
         return -1;
     }
-    if (got == 0)
-        return 0;
+    if (got == 0) return 0;
 
-    if (peer.sll_ifindex != ctx->bind_addr.sll_ifindex)
-        return 0;
+    if (peer.sll_ifindex != ctx->bind_addr.sll_ifindex) return 0;
 
     int psz = parse_packet(&pack, got, SERVER_SIGNATURE);
-    if (psz <= 0)
-        return 0;
+    if (psz <= 0) return 0;
 
-    if (memcmp(pack.header.eth_hdr.ether_shost, ctx->server_mac, ETH_ALEN) != 0)
-        return 0;
+    if (memcmp(pack.header.eth_hdr.ether_shost, ctx->server_mac, ETH_ALEN) != 0) return 0;
 
-    if (psz > 0)
-        (void)write(STDOUT_FILENO, pack.payload, (size_t)psz);
+    if (psz > 0) (void)write(STDOUT_FILENO, pack.payload, (size_t)psz);
 
     return 1;
 }
 
-/* tx frame */
-static int send_frame(client_ctx_t *ctx, const void *payload, size_t payload_len) {
-    pack_t pack;
+static int client_prepare_packet(client_ctx_t *ctx, pack_t *packet, const void *payload, size_t payload_len) {
     u8 src_mac[ETH_ALEN];
     int frame_len;
 
+    if (!ctx || !packet) return -1;
     if (payload_len > MAX_PAYLOAD_SIZE) {
         fprintf(stderr, "error: payload too long (%zu)\n", payload_len);
         return -1;
     }
 
-    memset(&pack, 0, sizeof(pack));
+    memset(packet, 0, sizeof(*packet));
     if (payload && payload_len)
-        memcpy(pack.payload, payload, payload_len);
+        memcpy(packet->payload, payload, payload_len);
 
     memcpy(src_mac, ctx->ifr.ifr_hwaddr.sa_data, ETH_ALEN);
-    frame_len = build_packet(&pack, payload_len, src_mac, ctx->server_mac, CLIENT_SIGNATURE);
+    frame_len = build_packet(packet, payload_len, src_mac, ctx->server_mac, CLIENT_SIGNATURE);
     if (frame_len < 0) {
         fprintf(stderr, "build_packet failed\n");
         return -1;
     }
+    return frame_len;
+}
 
-    if (sendto(ctx->sockfd, &pack, (size_t)frame_len, 0,
-               (struct sockaddr *)&ctx->saddr, sizeof(ctx->saddr)) < 0) {
+static int client_flush_packet(client_ctx_t *ctx, const pack_t *packet, size_t frame_len) {
+    if (!ctx || !packet) return -1;
+    debug_dump_frame("debug: client tx frame", (const u8 *)packet, frame_len);
+    if (sendto(ctx->sockfd, packet, frame_len, 0, (struct sockaddr *)&ctx->saddr, sizeof(ctx->saddr)) < 0) {
         perror("sendto");
         return -1;
     }
     return 0;
 }
 
+/* tx frame */
+static int client_send_payload(client_ctx_t *ctx, const void *payload, size_t payload_len) {
+    pack_t packet;
+    int frame_len = client_prepare_packet(ctx, &packet, payload, payload_len);
+    if (frame_len < 0) return -1;
+    return client_flush_packet(ctx, &packet, (size_t)frame_len);
+}
+
+static int client_handle_socket_event(client_ctx_t *ctx) {
+    int rc = recv_once_and_print(ctx);
+    return (rc < 0) ? -1 : 0;
+}
+
+static int client_handle_stdin_event(client_ctx_t *ctx) {
+    u8 ibuf[MAX_PAYLOAD_SIZE];
+    ssize_t r = read(STDIN_FILENO, ibuf, sizeof(ibuf));
+    if (r < 0) {
+        if (errno == EINTR) return 0;
+        perror("read");
+        return -1;
+    }
+    if (r == 0) return 0;
+
+    norm_in(ibuf, (size_t)r);
+    if (ctx->local_echo)
+        (void)write(STDOUT_FILENO, ibuf, (size_t)r);
+    return client_send_payload(ctx, ibuf, (size_t)r);
+}
+
 /* wait first response until deadline using shared recv path */
 static int wait_resp(client_ctx_t *ctx, u64 deadline_ns) {
+    int seen = 0;
     for (;;) {
         u64 now = mono_ns();
         if (now >= deadline_ns)
-            return 0;
+            return seen ? 1 : 0;
 
         u64 rem = deadline_ns - now;
         struct timeval tv;
@@ -183,12 +233,12 @@ static int wait_resp(client_ctx_t *ctx, u64 deadline_ns) {
             return -1;
         }
         if (rc == 0)
-            return 0;
+            return seen ? 1 : 0;
 
         if (FD_ISSET(ctx->sockfd, &rfds)) {
             int r = recv_once_and_print(ctx);
             if (r < 0) return -1;
-            if (r > 0) return 1;
+            if (r > 0) seen = 1;
         }
     }
 }
@@ -211,25 +261,12 @@ static int client_loop(client_ctx_t *ctx) {
         }
 
         if (FD_ISSET(STDIN_FILENO, &rfds)) {
-            u8 ibuf[MAX_PAYLOAD_SIZE];
-            ssize_t r = read(STDIN_FILENO, ibuf, sizeof(ibuf));
-            if (r < 0) {
-                if (errno == EINTR) continue;
-                perror("read");
+            if (client_handle_stdin_event(ctx) != 0)
                 return -1;
-            }
-            if (r > 0) {
-                norm_in(ibuf, (size_t)r);
-                if (ctx->local_echo)
-                    (void)write(STDOUT_FILENO, ibuf, (size_t)r);
-                if (send_frame(ctx, ibuf, (size_t)r) != 0)
-                    return -1;
-            }
         }
 
         if (FD_ISSET(ctx->sockfd, &rfds)) {
-            int r = recv_once_and_print(ctx);
-            if (r < 0)
+            if (client_handle_socket_event(ctx) != 0)
                 return -1;
         }
     }
@@ -286,24 +323,13 @@ int main(int argc, char **argv) {
         return pr > 0 ? 0 : 1;
 
     client_ctx_t ctx;
-    memset(&ctx, 0, sizeof(ctx));
-    ctx.sockfd = -1;
-    ctx.local_echo = a.local_echo;
-
-    if (a2mac(a.mac_str, ctx.server_mac) < 0) {
-        fprintf(stderr, "error: invalid mac format: %s\n", a.mac_str);
+    if (client_ctx_init(&ctx, &a) != 0)
         return 1;
-    }
-
-    if (init_client_sock(&ctx, a.iface) != 0) {
-        if (ctx.sockfd >= 0) close(ctx.sockfd);
-        return 1;
-    }
 
     if (a.shell) {
         size_t slen = strlen(a.shell) + 1;
-        if (send_frame(&ctx, a.shell, slen) != 0) {
-            close(ctx.sockfd);
+        if (client_send_payload(&ctx, a.shell, slen) != 0) {
+            client_ctx_deinit(&ctx);
             return 1;
         }
     }
@@ -313,7 +339,7 @@ int main(int argc, char **argv) {
         size_t len = strlen(a.cmd);
         if (len + 1 > sizeof(buf)) {
             fprintf(stderr, "error: command too long\n");
-            close(ctx.sockfd);
+            client_ctx_deinit(&ctx);
             return 1;
         }
         memcpy(buf, a.cmd, len);
@@ -322,8 +348,8 @@ int main(int argc, char **argv) {
             (void)write(STDOUT_FILENO, buf, len);
             (void)write(STDOUT_FILENO, "\n", 1);
         }
-        if (send_frame(&ctx, buf, len + 1) != 0) {
-            close(ctx.sockfd);
+        if (client_send_payload(&ctx, buf, len + 1) != 0) {
+            client_ctx_deinit(&ctx);
             return 1;
         }
 
@@ -332,16 +358,16 @@ int main(int argc, char **argv) {
         if (seen <= 0) {
             if (seen == 0)
                 fprintf(stderr, "error: no response within timeout\n");
-            close(ctx.sockfd);
+            client_ctx_deinit(&ctx);
             return 1;
         }
-        close(ctx.sockfd);
+        client_ctx_deinit(&ctx);
         return 0;
     }
 
     {
         int rc = client_loop(&ctx);
-        close(ctx.sockfd);
+        client_ctx_deinit(&ctx);
         return rc == 0 ? 0 : 1;
     }
 }
