@@ -13,34 +13,15 @@ make
 
 ## usage
 ### server
-Start a server on machine 1 (no command argument needed).
+Start a server on machine 1.
 ```sh
 ./a eth1
 ```
-The server waits for the first client frame, reads the requested command from its payload, and launches it (defaults to `/bin/sh` if the client keeps the default).
 
 ### client
 Start a client on a machine 2.
 ```sh
 ./b eth1 11:22:33:44:55:66 /bin/bash
 ```
-This connects the client to the server machine with MAC `11:22:33:44:55:66` and asks it to spawn `/bin/bash` as the interactive shell. If the remote side already has a shell running (for example, it was triggered earlier via the kernel module), append `--skip-init` to avoid sending a new init frame:
 
-```sh
-./b eth1 11:22:33:44:55:66 --skip-init
-```
-
-By default the client disables local echo for a clean remote shell. Append `--local-echo` if you explicitly need to see your keystrokes locally.
-
-To send a one-off command after the session is up (and exit once the response arrives):
-```sh
-./b eth1 11:22:33:44:55:66 /bin/bash "echo 123"
-```
-The client first establishes the remote shell (`/bin/bash`), pushes the command followed by a newline, prints the remote output, and exits once the response arrives (used by the bridge test harness).
-
-## тестирование
-Юнит-тесты для общих хелперов (CRC, упаковка кадров, дедупликация) живут в `tests/` и используют легковесный раннер из корневого `test_util.h`, поэтому никаких внешних библиотек не требуется. В консоли появятся строки вида `error: payload size too large` и `error: crc mismatch` — это часть негативных сценариев, а не фейлы:
-
-```sh
-make test-unit
-```
+The client ask server to run /bin/bash

@@ -15,7 +15,7 @@ modules.order
 
 # Logs and run artifacts
 *.log
-test_logs/
+logs/
 
 
 # vscode

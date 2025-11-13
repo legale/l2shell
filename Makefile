@@ -51,10 +51,10 @@ $(COMMON_TEST_BIN): tests/common_tests.c common.c | tests/test_common_shared.h t
 	$(CC) $(CFLAGS) $^ -o $@ $(TEST_LDLIBS)
 
 clean:
-	rm -rf $(OBJ_A) $(OBJ_B) $(BIN_A) $(BIN_B) $(BIN_A)_static $(BIN_B)_static *.o *.so core *.core *~ \
+	sudo rm -rf $(OBJ_A) $(OBJ_B) $(BIN_A) $(BIN_B) $(BIN_A)_static $(BIN_B)_static *.o *.so core *.core *~ \
 		$(TEST_BINARIES)
 	$(MAKE) -C $(KDIR) M=$(PWD) clean
-	rm -f $(KMOD)
+	sudo rm -f $(KMOD)
 
 .PHONY: test
 test: $(BIN_A) $(BIN_B)

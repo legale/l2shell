@@ -22,7 +22,7 @@ SERVER_IF="veth_srv0"
 SERVER_PEER="veth_srv1"
 CLIENT_IF="veth_cli0"
 CLIENT_PEER="veth_cli1"
-LOG_DIR="test_logs"
+LOG_DIR="logs"
 SERVER_LOG="${LOG_DIR}/server.log"
 CLIENT_LOG="${LOG_DIR}/client.log"
 SERVER_PID=""
@@ -80,7 +80,7 @@ log "Launching server ./a on ${SERVER_IF}"
 SERVER_PID=$!
 sleep 1
 
-log "Running client ./b on ${CLIENT_IF} to send 'echo 123'"
+log "./b "${CLIENT_IF}" "${SERVER_MAC}" /bin/bash \"echo 123\" > "${CLIENT_LOG}""
 set +e
 ./b "${CLIENT_IF}" "${SERVER_MAC}" /bin/bash "echo 123" >"${CLIENT_LOG}" 2>&1
 CLIENT_RC=$?
