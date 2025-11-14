@@ -14,7 +14,7 @@ INCLUDE = -I/usr/include/ -I. -Itests
 OBJ_COMMON = $(SRC_COMMON:.c=.o)
 OBJ_A   = $(SRC_A:.c=.o) $(OBJ_COMMON)
 OBJ_B   = $(SRC_B:.c=.o) $(OBJ_COMMON)
-CFLAGS  += $(FLAGS) $(INCLUDE) $(DEFINE)
+CFLAGS  += $(FLAGS) $(DEFINE)
 LDFLAGS += -L/usr/local/lib
 LDLIBS  = -lc
 
@@ -34,21 +34,21 @@ all: $(BIN_A) $(BIN_B) static $(TEST_BINARIES) kmod
 #	scp -P 443 b_static sysadmin@93.180.6.181:/tmp/b
 
 $(BIN_A): $(OBJ_A)
-	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJ_A) $(LDLIBS) -o $(BIN_A)
+	$(CC) $(INCLUDE) $(CFLAGS) $(LDFLAGS) $(OBJ_A) $(LDLIBS) -o $(BIN_A)
 
 $(BIN_B): $(OBJ_B)
-	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJ_B) $(LDLIBS) -o $(BIN_B)
+	$(CC) $(INCLUDE) $(CFLAGS) $(LDFLAGS) $(OBJ_B) $(LDLIBS) -o $(BIN_B)
 
 static: $(BIN_A)_static $(BIN_B)_static
 
 $(BIN_A)_static: $(OBJ_A)
-	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJ_A) -static -o $@
+	$(CC) $(INCLUDE) $(CFLAGS) $(LDFLAGS) $(OBJ_A) -static -o $@
 
 $(BIN_B)_static: $(OBJ_B)
-	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJ_B) -static -o $@
+	$(CC) $(INCLUDE) $(CFLAGS) $(LDFLAGS) $(OBJ_B) -static -o $@
 
 $(COMMON_TEST_BIN): tests/common_tests.c common.c | tests/test_common_shared.h test_util.h common.h
-	$(CC) $(CFLAGS) $^ -o $@ $(TEST_LDLIBS)
+	$(CC) $(INCLUDE) $(CFLAGS) $^ -o $@ $(TEST_LDLIBS)
 
 clean:
 	sudo rm -rf $(OBJ_A) $(OBJ_B) $(BIN_A) $(BIN_B) $(BIN_A)_static $(BIN_B)_static *.o *.so core *.core *~ \

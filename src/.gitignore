@@ -8,6 +8,7 @@ b_static
 *.o
 *.ko
 *.mod
+*.cmd
 *.mod.c
 *.mod.o
 Module.symvers
