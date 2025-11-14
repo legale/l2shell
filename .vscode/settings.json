@@ -1,9 +1,0 @@
-{
-	"files.associations": {
-		"test_util.h": "c",
-		"common.h": "c",
-		"limits.h": "c",
-		"if_ether.h": "c",
-		"ether.h": "c"
-	}
-}
