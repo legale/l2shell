@@ -17,41 +17,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#define BLOCK_SIZE 4
-
-static const u8 key_magic[BLOCK_SIZE] = {4, 1, 2, 3};
-static const u8 zero_key[BLOCK_SIZE] = {0, 0, 0, 0};
-
 const u8 broadcast_mac[ETH_ALEN] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-
-void enc_dec(const u8 *input, u8 *output, const u8 *key, size_t len) {
-    assert(input);
-    assert(output);
-    assert(key);
-    if (len == 0) return;
-
-    u8 temp[BLOCK_SIZE];
-
-    for (size_t i = 0; i < len; i += BLOCK_SIZE) {
-        size_t chunk = len - i < BLOCK_SIZE ? len - i : BLOCK_SIZE;
-        for (size_t j = 0; j < chunk; j++) {
-            temp[j] = input[i + j] ^ key[j] ^ key_magic[j];
-        }
-        for (size_t j = 0; j < chunk; j++) {
-            output[i + j] = temp[j];
-        }
-    }
-}
-
-u32 calculate_checksum(const u8 *data, size_t len) {
-    assert(data);
-    u32 checksum = 0;
-    for (size_t i = 0; i < len; i++) {
-        checksum += data[i];
-    }
-    return checksum;
-}
-
 int build_packet(pack_t *packet, size_t payload_size, const u8 src_mac[ETH_ALEN],
                  const u8 dst_mac[ETH_ALEN], u32 signature) {
     if (!packet || !src_mac || !dst_mac) return -1;
@@ -75,7 +41,7 @@ int build_packet(pack_t *packet, size_t payload_size, const u8 src_mac[ETH_ALEN]
 
     /* crc over header(with crc=0) + encrypted payload */
     size_t frame_len = sizeof(packh_t) + payload_size;
-    u32 crc = calculate_checksum((const u8 *)packet, frame_len);
+    u32 crc = csum32((const u8 *)packet, frame_len);
 
     /* write crc */
     packet->header.crc = htonl(crc);
@@ -119,7 +85,7 @@ int parse_packet(pack_t *packet, ssize_t frame_len, u32 expected_signature) {
     }
 
     h->crc = 0;
-    u32 crc_calc = calculate_checksum((const u8 *)packet, expected_len);
+    u32 crc_calc = csum32((const u8 *)packet, expected_len);
     h->crc = crc_net;
 
     if (crc_host != crc_calc) {

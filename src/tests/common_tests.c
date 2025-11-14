@@ -91,7 +91,7 @@ static void test_build_and_parse_packet(void) {
         enc_dec(checksum_probe.payload, checksum_probe.payload, (u8 *)&checksum_probe.header.crc, payload_len);
     }
     checksum_probe.header.crc = 0;
-    u32 expected_crc = calculate_checksum((const u8 *)&checksum_probe, (size_t)frame_len);
+    u32 expected_crc = csum32((const u8 *)&checksum_probe, (size_t)frame_len);
     TEST_ASSERT_EQ(ntohl(packet.header.crc), expected_crc);
 
     pack_t parsed = {0};

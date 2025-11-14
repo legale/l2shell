@@ -138,4 +138,34 @@ static inline int hello_parse(const u8 *buf, size_t buf_len, hello_view_t *view)
     return 0;
 }
 
+static const u8 hello_key_magic[4] = {4, 1, 2, 3};
+static const u8 hello_zero_key[4] = {0, 0, 0, 0};
+#define zero_key hello_zero_key
+
+static inline void enc_dec(const u8 *input, u8 *output, const u8 *key, size_t len) {
+    if (!input || !output || !key || len == 0) return;
+    u8 tmp[4];
+    size_t i = 0;
+    while (i < len) {
+        size_t chunk = len - i < 4 ? len - i : 4;
+        size_t j;
+        for (j = 0; j < chunk; j++) {
+            tmp[j] = input[i + j] ^ key[j] ^ hello_key_magic[j];
+        }
+        for (j = 0; j < chunk; j++) {
+            output[i + j] = tmp[j];
+        }
+        i += chunk;
+    }
+}
+
+static inline u32 csum32(const u8 *p, size_t n) {
+    u32 s = 0;
+    size_t i;
+    for (i = 0; i < n; i++)
+        s += p[i];
+    return s;
+}
+
+
 #endif /* HELLO_PROTO_H */

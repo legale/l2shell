@@ -89,7 +89,6 @@ typedef struct packet_dedup_cache {
 } packet_dedup_t;
 
 void enc_dec(const u8 *input, u8 *output, const u8 *key, size_t len);
-u32 calculate_checksum(const u8 *data, size_t len);
 int build_packet(pack_t *packet, size_t payload_size, const u8 src_mac[ETH_ALEN], const u8 dst_mac[ETH_ALEN], u32 signature);
 int parse_packet(pack_t *packet, ssize_t frame_len, u32 expected_signature);
 void packet_dedup_init(packet_dedup_t *cache);

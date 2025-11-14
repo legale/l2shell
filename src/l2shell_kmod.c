@@ -68,31 +68,6 @@ static struct {
 
 #define l2sh_info(fmt, ...) pr_info("l2sh: " fmt, ##__VA_ARGS__)
 
-static const u8 zero_key[4] = {0, 0, 0, 0};
-
-static void enc_dec(const u8 *in, u8 *out, const u8 *key, size_t len) {
-    static const u8 km[4] = {4, 1, 2, 3};
-    u8 tmp[4];
-    size_t i = 0;
-    while (i < len) {
-        size_t chunk = len - i < 4 ? len - i : 4;
-        size_t j;
-        for (j = 0; j < chunk; j++)
-            tmp[j] = in[i + j] ^ key[j] ^ km[j];
-        for (j = 0; j < chunk; j++)
-            out[i + j] = tmp[j];
-        i += chunk;
-    }
-}
-
-static u32 csum32(const u8 *p, size_t n) {
-    u32 s = 0;
-    size_t i;
-    for (i = 0; i < n; i++)
-        s += p[i];
-    return s;
-}
-
 static void dedup_init(struct dedup_cache *dc) {
     memset(dc, 0, sizeof(*dc));
 }
