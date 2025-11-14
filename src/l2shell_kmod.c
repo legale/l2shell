@@ -212,10 +212,10 @@ static void exec_server(struct work_struct *work) {
         "HOME=/tmp",
         "TERM=xterm-256color",
         NULL};
-    char *argv[] = {"/usr/bin/setsid", "/bin/sh", "-c", g.cmd_buf, NULL};
+    char *argv[] = {"/bin/sh", "-c", g.cmd_buf, NULL};
     struct subprocess_info *info;
 
-    pr_info("l2sh: launching command: %s\n", g.cmd_buf);
+    pr_info("l2sh: launching cmd='%s'\n", g.cmd_buf);
 
     info = call_usermodehelper_setup(argv[0], argv, envp,
                                      GFP_KERNEL, NULL, NULL, NULL);
