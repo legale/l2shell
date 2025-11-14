@@ -20,7 +20,7 @@ define Package/l2shell
 endef
 
 define Package/l2shell/description
-Layer-2 shell utilities (server a, client b) with optional kernel trigger.
+Layer-2 shell utilities a - server, b - client and kernel module trigger.
 endef
 
 define KernelPackage/l2shell-kmod
@@ -39,11 +39,12 @@ endef
 
 define Build/Prepare
 	mkdir -p $(PKG_BUILD_DIR)
-	$(CP) ../../src/* $(PKG_BUILD_DIR)/
+	$(CP) ../../src $(PKG_BUILD_DIR)/
 endef
 
 define Build/Compile
 	$(MAKE) -C $(PKG_BUILD_DIR) \
+		KDIR="$(LINUX_DIR)" \
 		CC="$(TARGET_CC)" \
 		LD="$(TARGET_CC)" \
 		CFLAGS="$(TARGET_CFLAGS)" \
