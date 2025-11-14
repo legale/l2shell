@@ -52,10 +52,10 @@ $(COMMON_TEST_BIN): tests/common_tests.c common.c | tests/test_common_shared.h t
 	$(CC) $(CPPFLAGS)$(CFLAGS) $^ -o $@ $(TEST_LDLIBS)
 
 clean:
-	sudo rm -rf $(OBJ_A) $(OBJ_B) $(BIN_A) $(BIN_B) $(BIN_A)_static $(BIN_B)_static *.o *.so core *.core *~ \
-		$(TEST_BINARIES) logs/*
-	$(MAKE) -C $(KDIR) M=$(PWD) clean
-	sudo rm -f $(KMOD)
+	-@sudo rm -rf $(OBJ_A) $(OBJ_B) $(BIN_A) $(BIN_B) $(BIN_A)_static $(BIN_B)_static *.o *.so core *.core *~ \
+		$(TEST_BINARIES) logs/* || true
+	-@$(MAKE) -C $(KDIR) M=$(PWD) clean || true
+	-@sudo rm -f $(KMOD) || true
 
 .PHONY: test
 test: $(BIN_A) $(BIN_B)
