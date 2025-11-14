@@ -1,0 +1,1 @@
+cmd_/home/ru/l2shell/l2shell/src/Module.symvers :=  sed 's/ko$$/o/'  /home/ru/l2shell/l2shell/src/modules.order | scripts/mod/modpost -m      -o /home/ru/l2shell/l2shell/src/Module.symvers -e -i Module.symvers -T - 
