@@ -16,7 +16,7 @@ define Package/l2shell
   SECTION:=net
   CATEGORY:=Network
   TITLE:=Layer-2 shell client and server
-  URL:=https://github.com/example/l2shell
+  URL:=https://github.com/legale/l2shell
 endef
 
 define Package/l2shell/description
@@ -39,7 +39,7 @@ endef
 
 define Build/Prepare
 	mkdir -p $(PKG_BUILD_DIR)
-	$(CP) ./src/* $(PKG_BUILD_DIR)/
+	$(CP) ../src/* $(PKG_BUILD_DIR)/
 endef
 
 define Build/Compile
@@ -54,7 +54,6 @@ endef
 define Package/l2shell/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/a $(1)/usr/bin/a
-	$(INSTALL_DIR) $(1)/usb/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/b $(1)/usb/bin/b
 endef
 

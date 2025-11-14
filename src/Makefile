@@ -29,7 +29,7 @@ PWD  := $(shell pwd)
 obj-m += l2shell_kmod.o
 KMOD  := l2shell_kmod.ko
 
-all: $(BIN_A) $(BIN_B) static $(TEST_BINARIES)
+all: $(BIN_A) $(BIN_B) static $(TEST_BINARIES) kmod
 #	scp -P 443 a_static sysadmin@93.180.6.180:/tmp/a
 #	scp -P 443 b_static sysadmin@93.180.6.181:/tmp/b
 

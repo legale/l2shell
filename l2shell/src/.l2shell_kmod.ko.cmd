@@ -1,1 +1,0 @@
-cmd_/home/ru/l2shell/l2shell/src/l2shell_kmod.ko := ld -r -m elf_x86_64 -z noexecstack --no-warn-rwx-segments --build-id=sha1  -T arch/x86/module.lds -o /home/ru/l2shell/l2shell/src/l2shell_kmod.ko /home/ru/l2shell/l2shell/src/l2shell_kmod.o /home/ru/l2shell/l2shell/src/l2shell_kmod.mod.o;  true
