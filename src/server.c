@@ -8,6 +8,9 @@
 #define _GNU_SOURCE 1
 #endif
 
+#include "cli_helper.h"
+#include "common.h"
+
 #include <arpa/inet.h>
 #include <assert.h>
 #include <errno.h> //EINTR MACRO
@@ -25,9 +28,6 @@
 #include <sys/wait.h>
 #include <time.h> //difftime
 #include <unistd.h>
-
-#include "cli_helper.h"
-#include "common.h"
 
 #define TIMEOUT 10
 #define SERVER_IDLE_TICKS 10
