@@ -16,6 +16,7 @@
 #include <linux/skbuff.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
+#include <linux/version.h>
 #include <linux/workqueue.h>
 
 #define ETHER_TYPE_CUSTOM 0x88B5
@@ -403,11 +404,21 @@ static int l2_rx(struct sk_buff *skb, struct net_device *dev, struct packet_type
 
 static void log_interfaces(void) {
     struct net_device *dev;
+    struct net *net = &init_net;
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
     read_lock(&dev_base_lock);
-    for_each_netdev(&init_net, dev) {
+    for_each_netdev(net, dev) {
         pr_info("l2sh: listening on ifname=%s mac=%pM\n", dev->name, dev->dev_addr);
     }
     read_unlock(&dev_base_lock);
+#else
+    rcu_read_lock();
+    for_each_netdev_rcu(net, dev) {
+        pr_info("l2sh: listening on ifname=%s mac=%pM\n", dev->name, dev->dev_addr);
+    }
+    rcu_read_unlock();
+#endif
 }
 
 static struct packet_type l2_pt = {

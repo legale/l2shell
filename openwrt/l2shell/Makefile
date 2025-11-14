@@ -29,7 +29,7 @@ define KernelPackage/l2shell-kmod
   CATEGORY:=Kernel modules
   TITLE:=l2shell kernel trigger
   VERSION:=$(LINUX_VERSION)-$(PKG_VERSION)-$(PKG_RELEASE)
-  FILES:=$(PKG_BUILD_DIR)/src/l2shell_kmod.$(LINUX_KMOD_SUFFIX)
+  FILES:=$(PKG_BUILD_DIR)/l2shell_kmod.$(LINUX_KMOD_SUFFIX)
   AUTOLOAD:=$(call AutoLoad,50,l2shell_kmod)
 endef
 
@@ -39,7 +39,7 @@ endef
 
 define Build/Prepare
 	mkdir -p $(PKG_BUILD_DIR)
-	$(CP) ../../src $(PKG_BUILD_DIR)/
+	$(CP) ../../src/* $(PKG_BUILD_DIR)/
 endef
 
 define Build/Compile
@@ -50,21 +50,20 @@ define Build/Compile
 		CFLAGS="$(TARGET_CFLAGS)" \
 		LDFLAGS="$(TARGET_LDFLAGS)" \
 		BIN_A=a BIN_B=b
+
+
+	# kernel module l2shell_kmod.ko
+	$(KERNEL_MAKE) \
+		M="$(PKG_BUILD_DIR)" \
+		modules
 endef
 
 define Package/l2shell/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/a $(1)/usr/bin/a
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/b $(1)/usb/bin/b
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/b $(1)/usr/bin/b
 endef
 
-define Build/Compile/Kmod
-	$(MAKE) -C "$(LINUX_DIR)" \
-		ARCH="$(LINUX_KARCH)" \
-		CROSS_COMPILE="$(TARGET_CROSS)" \
-		M="$(PKG_BUILD_DIR)/src" \
-		modules
-endef
 
 define KernelPackage/l2shell-kmod/install
 	# no extra files apart from the module itself

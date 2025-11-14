@@ -3,8 +3,8 @@
 #ifndef COMMON_H
 #define COMMON_H
 
-#include "intshort.h"
 #include "hello_proto.h"
+#include "intshort.h"
 
 #include <net/if.h>
 #include <netinet/ether.h>
@@ -100,6 +100,6 @@ int init_packet_socket(int *sockfd, struct ifreq *ifr, struct sockaddr_ll *bind_
 void deinit_packet_socket(int *sockfd);
 void log_info(const char *tag, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 void log_error(const char *tag, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
-void log_error_errno(const char *tag, const char *op);
+void log_error_errno(const char *tag, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 
 #endif // COMMON_H

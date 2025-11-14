@@ -12,10 +12,10 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+#include <sys/stat.h> //fchmod
 #include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
-#include <sys/stat.h> //fchmod
 
 #define BLOCK_SIZE 4
 
@@ -186,12 +186,14 @@ void debug_dump_frame(const char *prefix, const u8 *data, size_t len) {
 
     const char *path = "logs/clientserver.log";
     int fd = open(path, O_WRONLY | O_CREAT | O_APPEND, 0666);
+    if (fd < 0) return;
+
     if (fd < 0) {
-        log_error_errno("debug_dump", "open");
+        log_error_errno("debug_dump", "open='%s'", path);
         return;
     }
     if (fchmod(fd, (mode_t)0666) < 0) {
-        log_error_errno("debug_dump", "fchmod");
+        log_error_errno("debug_dump", "fchmod='%s'", path);
         close(fd);
         return;
     }
@@ -231,16 +233,21 @@ void log_info(const char *tag, const char *fmt, ...) {
     va_end(ap);
 }
 
+void log_error_errno(const char *tag, const char *fmt, ...) {
+    int err = errno;
+    va_list ap;
+    va_start(ap, fmt);
+    char buf[256];
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    log_error(tag, "errno=%d err='%s' %s", err, strerror(err), buf);
+    va_end(ap);
+}
+
 void log_error(const char *tag, const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
     log_internal("error", tag, fmt, ap);
     va_end(ap);
-}
-
-void log_error_errno(const char *tag, const char *op) {
-    int err = errno;
-    log_error(tag, "op=%s errno=%d err=\"%s\"", op ? op : "unknown", err, strerror(err));
 }
 
 int init_packet_socket(int *sockfd, struct ifreq *ifr, struct sockaddr_ll *bind_addr, const char *iface, int bind_to_device) {
