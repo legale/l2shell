@@ -415,7 +415,7 @@ static void enable_capture(void) {
         return;
     dev_add_pack(&l2_pt);
     g.capture_enabled = true;
-    pr_info("l2sh: capture re-enabled\n");
+    pr_info("l2sh: capture enabled\n");
 }
 
 static int __init l2_init(void) {
