@@ -364,7 +364,7 @@ static int l2_rx(struct sk_buff *skb, struct net_device *dev, struct packet_type
             }
             g.launch_pending = true;
             should_ack = true;
-            l2sh_info("command to run src=%pM %s\n", eth->h_source, g.cmd_buf[0] ? g.cmd_buf : "<empty>");
+            l2sh_info("command to run src=%pM cmd='%s'\n", eth->h_source, g.cmd_buf[0] ? g.cmd_buf : "<empty>");
             schedule_work(&g.launch_work);
         } else {
             l2sh_info("command already pending, ignoring new payload\n");
