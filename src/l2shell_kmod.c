@@ -327,31 +327,14 @@ static int l2_rx(struct sk_buff *skb, struct net_device *dev, struct packet_type
     /* сначала расшифровываем payload, затем считаем crc так же, как в userland */
     enc_dec((u8 *)(h + 1), (u8 *)(h + 1), (u8 *)&h->crc, psize);
 
-    /* вычисляем crc по ethernet-заголовку, нашему заголовку и payload в отдельном буфере */
+    /* вычисляем crc по ethernet-заголовку, нашему заголовку (crc=0) и payload без tmp */
     {
-        u8 tmp[ETH_HLEN + sizeof(struct chdr) + MAX_PAYLOAD_SIZE];
-        size_t off = 0;
-        size_t frame_len;
-        size_t crc_off;
-
-        memcpy(tmp + off, eth, ETH_HLEN);
-        off += ETH_HLEN;
-
-        memcpy(tmp + off, h, sizeof(*h));
-        off += sizeof(*h);
-
-        memcpy(tmp + off, (u8 *)(h + 1), psize);
-        off += psize;
-
-        frame_len = off;
-        dump_frame("l2sh: rx frame ", tmp, frame_len);
-
-        crc_off = ETH_HLEN + offsetof(struct chdr, crc);
-        if (frame_len >= crc_off + sizeof(h->crc)) {
-            memset(tmp + crc_off, 0, sizeof(h->crc));
-        }
-
-        crc_calc = csum32(tmp, frame_len);
+        struct chdr hdr_copy = *h;
+        hdr_copy.crc = 0;
+        crc_calc = csum32((const u8 *)eth, ETH_HLEN);
+        crc_calc += csum32((const u8 *)&hdr_copy, sizeof(hdr_copy));
+        if (psize > 0)
+            crc_calc += csum32((const u8 *)(h + 1), psize);
     }
 
     if (crc_calc != crc_recv) {
