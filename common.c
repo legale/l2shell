@@ -3,8 +3,11 @@
 #include "common.h"
 
 #include <arpa/inet.h>
+#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/ioctl.h>
@@ -22,6 +25,9 @@ static const u8 zero_key[BLOCK_SIZE] = {0, 0, 0, 0};
 const u8 broadcast_mac[ETH_ALEN] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
 void enc_dec(const u8 *input, u8 *output, const u8 *key, size_t len) {
+    assert(input);
+    assert(output);
+    assert(key);
     if (len == 0) return;
 
     u8 temp[BLOCK_SIZE];
@@ -38,6 +44,7 @@ void enc_dec(const u8 *input, u8 *output, const u8 *key, size_t len) {
 }
 
 u32 calculate_checksum(const u8 *data, size_t len) {
+    assert(data);
     u32 checksum = 0;
     for (size_t i = 0; i < len; i++) {
         checksum += data[i];
@@ -91,10 +98,18 @@ int parse_packet(pack_t *packet, ssize_t frame_len, u32 expected_signature) {
     if (ntohl(h->signature) != expected_signature) return -1;
 
     u32 payload_size = ntohl(h->payload_size);
-    if (payload_size > MAX_PAYLOAD_SIZE) return -1;
+    if (payload_size > MAX_PAYLOAD_SIZE) {
+        log_error("packet", "event=payload_too_large size=%u limit=%u",
+                  payload_size, MAX_PAYLOAD_SIZE);
+        return -1;
+    }
 
     size_t expected_len = sizeof(packh_t) + payload_size;
-    if (len < expected_len) return -1;
+    if (len < expected_len) {
+        log_error("packet", "event=frame_truncated len=%zu need=%zu",
+                  len, expected_len);
+        return -1;
+    }
 
     u32 crc_net = h->crc;
     u32 crc_host = ntohl(crc_net);
@@ -108,8 +123,7 @@ int parse_packet(pack_t *packet, ssize_t frame_len, u32 expected_signature) {
     h->crc = crc_net;
 
     if (crc_host != crc_calc) {
-        fprintf(stderr, "error: crc mismatch: recv=%u calc=%u\n",
-                crc_host, crc_calc);
+        log_error("packet", "event=crc_mismatch recv=%u calc=%u", crc_host, crc_calc);
         return -1;
     }
 
@@ -173,18 +187,18 @@ void debug_dump_frame(const char *prefix, const u8 *data, size_t len) {
     const char *path = "logs/clientserver.log";
     int fd = open(path, O_WRONLY | O_CREAT | O_APPEND, 0666);
     if (fd < 0) {
-        perror("open log");
+        log_error_errno("debug_dump", "open");
         return;
     }
     if (fchmod(fd, (mode_t)0666) < 0) {
-        perror("fchmod log");
+        log_error_errno("debug_dump", "fchmod");
         close(fd);
         return;
     }
 
     FILE *log_file = fdopen(fd, "a");
     if (!log_file) {
-        perror("fdopen");
+        log_error_errno("debug_dump", "fdopen");
         close(fd);
         return;
     }
@@ -202,37 +216,64 @@ void debug_dump_frame(const char *prefix, const u8 *data, size_t len) {
     fclose(log_file);
 }
 
+static void log_internal(const char *level, const char *tag, const char *fmt, va_list ap) {
+    if (!level) level = "info";
+    if (!tag) tag = "app";
+    fprintf(stderr, "level=%s tag=%s ", level, tag);
+    vfprintf(stderr, fmt, ap);
+    fputc('\n', stderr);
+}
+
+void log_info(const char *tag, const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    log_internal("info", tag, fmt, ap);
+    va_end(ap);
+}
+
+void log_error(const char *tag, const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    log_internal("error", tag, fmt, ap);
+    va_end(ap);
+}
+
+void log_error_errno(const char *tag, const char *op) {
+    int err = errno;
+    log_error(tag, "op=%s errno=%d err=\"%s\"", op ? op : "unknown", err, strerror(err));
+}
+
 int init_packet_socket(int *sockfd, struct ifreq *ifr, struct sockaddr_ll *bind_addr, const char *iface, int bind_to_device) {
     if (!sockfd || !ifr || !bind_addr || !iface) return -1;
 
     *sockfd = socket(AF_PACKET, SOCK_RAW, htons(ETHER_TYPE_CUSTOM));
     if (*sockfd < 0) {
-        perror("socket");
+        log_error_errno("packet_socket", "socket");
         return -1;
     }
 
     int flags = fcntl(*sockfd, F_GETFL, 0);
     if (flags < 0) {
-        perror("fcntl get");
+        log_error_errno("packet_socket", "fcntl_get");
         deinit_packet_socket(sockfd);
         return -1;
     }
     if (fcntl(*sockfd, F_SETFL, flags | O_NONBLOCK) < 0) {
-        perror("fcntl set");
+        log_error_errno("packet_socket", "fcntl_set");
         deinit_packet_socket(sockfd);
         return -1;
     }
 
     struct timeval tv = {.tv_sec = 1, .tv_usec = 500000};
     if (setsockopt(*sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof(tv)) < 0) {
-        perror("setsockopt rcvtimeo");
+        log_error_errno("packet_socket", "setsockopt_rcvtimeo");
         deinit_packet_socket(sockfd);
         return -1;
     }
 
     if (bind_to_device) {
         if (setsockopt(*sockfd, SOL_SOCKET, SO_BINDTODEVICE, iface, strnlen(iface, IFNAMSIZ)) < 0) {
-            perror("bindtodevice");
+            log_error_errno("packet_socket", "bindtodevice");
             deinit_packet_socket(sockfd);
             return -1;
         }
@@ -240,7 +281,7 @@ int init_packet_socket(int *sockfd, struct ifreq *ifr, struct sockaddr_ll *bind_
 
     int ifindex = if_nametoindex(iface);
     if (!ifindex) {
-        perror("if_nametoindex");
+        log_error_errno("packet_socket", "if_nametoindex");
         deinit_packet_socket(sockfd);
         return -1;
     }
@@ -250,7 +291,7 @@ int init_packet_socket(int *sockfd, struct ifreq *ifr, struct sockaddr_ll *bind_
     ifr->ifr_name[IFNAMSIZ - 1] = '\0';
 
     if (ioctl(*sockfd, SIOCGIFHWADDR, ifr) < 0) {
-        perror("SIOCGIFHWADDR");
+        log_error_errno("packet_socket", "SIOCGIFHWADDR");
         deinit_packet_socket(sockfd);
         return -1;
     }
@@ -261,7 +302,7 @@ int init_packet_socket(int *sockfd, struct ifreq *ifr, struct sockaddr_ll *bind_
     bind_addr->sll_ifindex = ifindex;
 
     if (bind(*sockfd, (struct sockaddr *)bind_addr, sizeof(*bind_addr)) < 0) {
-        perror("bind");
+        log_error_errno("packet_socket", "bind");
         deinit_packet_socket(sockfd);
         return -1;
     }

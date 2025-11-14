@@ -9,6 +9,52 @@
 #include "test_common_shared.h"
 #include "test_util.h"
 
+static void test_hello_build_and_parse(void) {
+    PRINT_TEST_START("hello_build_and_parse");
+    u8 payload[MAX_PAYLOAD_SIZE] = {0};
+    const char *spawn = "/usr/local/bin/a eth0";
+    const char *shell = "sh -c test";
+    hello_builder_t builder = {
+        .spawn_cmd = spawn,
+        .shell_cmd = shell,
+        .nonce = 0x1122334455667788ULL,
+        .include_nonce = 1,
+    };
+
+    int len = hello_build(payload, sizeof(payload), &builder);
+    TEST_ASSERT(len > 0);
+
+    hello_view_t view;
+    TEST_ASSERT(hello_parse(payload, (size_t)len, &view) == 0);
+    TEST_ASSERT(view.have_spawn);
+    TEST_ASSERT(view.spawn_len == strlen(spawn));
+    TEST_ASSERT_MEMEQ(view.spawn_cmd, spawn, view.spawn_len);
+    TEST_ASSERT(view.have_shell);
+    TEST_ASSERT(view.shell_len == strlen(shell));
+    TEST_ASSERT_MEMEQ(view.shell_cmd, shell, view.shell_len);
+    TEST_ASSERT(view.have_nonce);
+    TEST_ASSERT(view.nonce == builder.nonce);
+    PRINT_TEST_PASSED();
+}
+
+static void test_hello_parse_rejects_bad_version(void) {
+    PRINT_TEST_START("hello_parse_rejects_bad_version");
+    u8 payload[1] = {HELLO_VERSION + 1};
+    hello_view_t view;
+    PRINT_TEST_INFO("error is expected");
+    TEST_ASSERT(hello_parse(payload, sizeof(payload), &view) < 0);
+    PRINT_TEST_PASSED();
+}
+
+static void test_hello_parse_rejects_truncated_tlv(void) {
+    PRINT_TEST_START("hello_parse_rejects_truncated_tlv");
+    u8 payload[4] = {HELLO_VERSION, HELLO_T_SHELL, 0x00, 0x04};
+    hello_view_t view;
+    PRINT_TEST_INFO("error is expected");
+    TEST_ASSERT(hello_parse(payload, sizeof(payload), &view) < 0);
+    PRINT_TEST_PASSED();
+}
+
 static void test_enc_dec_roundtrip(void) {
     PRINT_TEST_START("enc_dec_roundtrip");
     u8 plain[64];
@@ -306,6 +352,9 @@ static void test_debug_dump_frame_logs_prefix(void) {
 
 int main(int argc, char **argv) {
     const struct test_entry tests[] = {
+        {"hello_build_and_parse", test_hello_build_and_parse},
+        {"hello_parse_rejects_bad_version", test_hello_parse_rejects_bad_version},
+        {"hello_parse_rejects_truncated_tlv", test_hello_parse_rejects_truncated_tlv},
         {"enc_dec_roundtrip", test_enc_dec_roundtrip},
         {"build_and_parse_packet", test_build_and_parse_packet},
         {"build_packet_preserves_padding", test_build_packet_preserves_padding},

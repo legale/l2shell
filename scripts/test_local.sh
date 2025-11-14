@@ -73,7 +73,7 @@ run ip link set "${SERVER_PEER}" master "${BR_IF}"
 run ip link set "${CLIENT_PEER}" master "${BR_IF}"
 
 SERVER_MAC="$(cat "/sys/class/net/${SERVER_IF}/address")"
-log "Server MAC detected: ${SERVER_MAC}"
+log server mac="${SERVER_MAC}"
 
 # Run test
 log "Launching server ./a on ${SERVER_IF}"
@@ -102,7 +102,6 @@ fi
 FOUND_COUNT=$(grep -c "123" "${CLIENT_LOG}")
 if [ "$FOUND_COUNT" -gt 2 ]; then
     log "Local bridge test passed: found '123' in output"
-    rm -f "${CLIENT_LOG}" "${SERVER_LOG}"
     exit 0
 else
     log "Local bridge test failed: expected '123' in client output"

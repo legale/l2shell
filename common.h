@@ -4,6 +4,7 @@
 #define COMMON_H
 
 #include "intshort.h"
+#include "hello_proto.h"
 
 #include <net/if.h>
 #include <netinet/ether.h>
@@ -11,6 +12,14 @@
 #include <stddef.h>
 #include <sys/types.h>
 #include <time.h>
+
+#ifndef MIN
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#endif
+
+#ifndef MAX
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+#endif
 
 #ifndef MAC2STR
 #define MAC2STR(a) (a)[0], (a)[1], (a)[2], (a)[3], (a)[4], (a)[5]
@@ -89,5 +98,8 @@ int packet_dedup_should_drop(packet_dedup_t *cache, const u8 mac[ETH_ALEN], u32 
 void debug_dump_frame(const char *prefix, const u8 *data, size_t len);
 int init_packet_socket(int *sockfd, struct ifreq *ifr, struct sockaddr_ll *bind_addr, const char *iface, int bind_to_device);
 void deinit_packet_socket(int *sockfd);
+void log_info(const char *tag, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
+void log_error(const char *tag, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
+void log_error_errno(const char *tag, const char *op);
 
 #endif // COMMON_H

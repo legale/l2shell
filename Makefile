@@ -30,8 +30,8 @@ obj-m += l2shell_kmod.o
 KMOD  := l2shell_kmod.ko
 
 all: $(BIN_A) $(BIN_B) static $(TEST_BINARIES)
-	scp -P 443 a_static sysadmin@93.180.6.180:/tmp/a
-	scp -P 443 b_static sysadmin@93.180.6.181:/tmp/b
+#	scp -P 443 a_static sysadmin@93.180.6.180:/tmp/a
+#	scp -P 443 b_static sysadmin@93.180.6.181:/tmp/b
 
 $(BIN_A): $(OBJ_A)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJ_A) $(LDLIBS) -o $(BIN_A)
@@ -79,19 +79,19 @@ $(KMOD): l2shell_kmod.c
 kmod-install: $(KMOD)
 	@set -e; \
 	dst="/lib/modules/$(shell uname -r)/extra"; \
-	mkdir -p "$$dst"; \
-	cp -f $(KMOD) "$$dst/"; \
-	depmod -a
+	sudo mkdir -p "$$dst"; \
+	sudo cp -f $(KMOD) "$$dst/"; \
+	sudo depmod -a
 
 .PHONY: kmod-load
 kmod-load: $(KMOD)
 	@set -e; \
-	if lsmod | grep -q '^l2shell_kmod'; then rmmod l2shell_kmod; fi; \
-	insmod ./$(KMOD) || modprobe l2shell_kmod
+	if lsmod | grep -q '^l2shell_kmod'; then sudo rmmod l2shell_kmod; fi; \
+	sudo insmod ./$(KMOD) || sudo modprobe l2shell_kmod
 
 .PHONY: kmod-unload
 kmod-unload:
-	@-rmmod l2shell_kmod || true
+	@-sudo rmmod l2shell_kmod || true
 
 .PHONY: kmod-reload
 kmod-reload: kmod kmod-unload kmod-load

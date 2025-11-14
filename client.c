@@ -14,6 +14,7 @@
 #include "common.h"
 
 #include <arpa/inet.h>
+#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -36,6 +37,7 @@
 typedef struct {
     const char *iface;
     const char *mac_str;
+    const char *spawn_cmd;
     const char *shell;
     const char *cmd;
     int local_echo;
@@ -50,6 +52,13 @@ typedef struct {
     int local_echo;
 } client_ctx_t;
 
+typedef struct ready_msg {
+    u64 nonce;
+    int have_nonce;
+    int from_userland;
+    int from_kernel;
+} ready_msg_t;
+
 // forward declarations
 static void usage(const char *p);
 static int client_ctx_init(client_ctx_t *ctx, const client_args_t *args);
@@ -60,6 +69,48 @@ static u64 mono_ns(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (u64)ts.tv_sec * 1000000000ULL + (u64)ts.tv_nsec;
+}
+
+static u64 client_generate_nonce(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    return ((u64)ts.tv_sec << 32) ^ (u64)ts.tv_nsec ^ (u64)getpid();
+}
+
+static int parse_ready_message(const u8 *payload, size_t len, ready_msg_t *msg) {
+    char buf[128];
+    size_t copy;
+
+    if (!payload || len == 0 || !msg)
+        return 0;
+    copy = len < sizeof(buf) - 1 ? len : sizeof(buf) - 1;
+    memcpy(buf, payload, copy);
+    buf[copy] = '\0';
+
+    if (strncmp(buf, "ready", 5) != 0)
+        return 0;
+
+    msg->have_nonce = 0;
+    msg->nonce = 0;
+    msg->from_userland = 0;
+    msg->from_kernel = 0;
+
+    char *nonce_str = strstr(buf, "nonce=");
+    if (nonce_str) {
+        unsigned long long tmp;
+        if (sscanf(nonce_str, "nonce=%llx", &tmp) == 1) {
+            msg->have_nonce = 1;
+            msg->nonce = (u64)tmp;
+        }
+    }
+    char *source_str = strstr(buf, "source=");
+    if (source_str) {
+        if (strncmp(source_str, "source=userland", 15) == 0)
+            msg->from_userland = 1;
+        else if (strncmp(source_str, "source=kernel", 13) == 0)
+            msg->from_kernel = 1;
+    }
+    return 1;
 }
 
 /* parse mac aa:bb:cc:dd:ee:ff */
@@ -73,7 +124,8 @@ static inline int a2mac(const char *s, u8 mac[ETH_ALEN]) {
 }
 
 static int init_client_sock(client_ctx_t *ctx, const char *iface) {
-    if (!ctx || !iface) return -1;
+    assert(ctx);
+    assert(iface);
 
     if (init_packet_socket(&ctx->sockfd, &ctx->ifr, &ctx->bind_addr, iface, 1) != 0) {
         return -1;
@@ -101,7 +153,7 @@ static int client_ctx_init(client_ctx_t *ctx, const client_args_t *args) {
     ctx->local_echo = args->local_echo;
 
     if (a2mac(args->mac_str, ctx->server_mac) < 0) {
-        fprintf(stderr, "error: invalid mac format: %s\n", args->mac_str);
+        log_error("client_args", "event=invalid_mac value=%s", args->mac_str);
         return -1;
     }
 
@@ -119,28 +171,44 @@ static void norm_in(u8 *buf, size_t len) {
             buf[i] = '\r';
 }
 
-static int recv_once_and_print(client_ctx_t *ctx) {
-    pack_t pack;
+static int client_recv_packet(client_ctx_t *ctx, pack_t *pack, int *payload_len) {
     struct sockaddr_ll peer;
     socklen_t plen = sizeof(peer);
-    ssize_t got = recvfrom(ctx->sockfd, &pack, sizeof(pack), 0, (struct sockaddr *)&peer, &plen);
+    ssize_t got;
+
+    assert(ctx);
+    assert(pack);
+
+    got = recvfrom(ctx->sockfd, pack, sizeof(*pack), 0, (struct sockaddr *)&peer, &plen);
     if (got < 0) {
         if (errno == EINTR || errno == EAGAIN)
             return 0;
-        perror("recvfrom");
+        log_error_errno("client_recv", "recvfrom");
         return -1;
     }
-    if (got == 0) return 0;
+    if (got == 0)
+        return 0;
+    if (peer.sll_ifindex != ctx->bind_addr.sll_ifindex)
+        return 0;
 
-    if (peer.sll_ifindex != ctx->bind_addr.sll_ifindex) return 0;
+    int psz = parse_packet(pack, got, SERVER_SIGNATURE);
+    if (psz <= 0)
+        return 0;
+    if (memcmp(pack->header.eth_hdr.ether_shost, ctx->server_mac, ETH_ALEN) != 0)
+        return 0;
+    if (payload_len)
+        *payload_len = psz;
+    return 1;
+}
 
-    int psz = parse_packet(&pack, got, SERVER_SIGNATURE);
-    if (psz <= 0) return 0;
-
-    if (memcmp(pack.header.eth_hdr.ether_shost, ctx->server_mac, ETH_ALEN) != 0) return 0;
-
-    if (psz > 0) (void)write(STDOUT_FILENO, pack.payload, (size_t)psz);
-
+static int recv_once_and_print(client_ctx_t *ctx) {
+    pack_t pack;
+    int payload_len = 0;
+    int rc = client_recv_packet(ctx, &pack, &payload_len);
+    if (rc <= 0)
+        return rc < 0 ? -1 : 0;
+    if (payload_len > 0)
+        (void)write(STDOUT_FILENO, pack.payload, (size_t)payload_len);
     return 1;
 }
 
@@ -148,9 +216,10 @@ static int client_prepare_packet(client_ctx_t *ctx, pack_t *packet, const void *
     u8 src_mac[ETH_ALEN];
     int frame_len;
 
-    if (!ctx || !packet) return -1;
+    assert(ctx);
+    assert(packet);
     if (payload_len > MAX_PAYLOAD_SIZE) {
-        fprintf(stderr, "error: payload too long (%zu)\n", payload_len);
+        log_error("client_packet", "event=payload_too_long len=%zu", payload_len);
         return -1;
     }
 
@@ -161,17 +230,18 @@ static int client_prepare_packet(client_ctx_t *ctx, pack_t *packet, const void *
     memcpy(src_mac, ctx->ifr.ifr_hwaddr.sa_data, ETH_ALEN);
     frame_len = build_packet(packet, payload_len, src_mac, ctx->server_mac, CLIENT_SIGNATURE);
     if (frame_len < 0) {
-        fprintf(stderr, "build_packet failed\n");
+        log_error("client_packet", "event=build_packet_failed");
         return -1;
     }
     return frame_len;
 }
 
 static int client_flush_packet(client_ctx_t *ctx, const pack_t *packet, size_t frame_len) {
-    if (!ctx || !packet) return -1;
+    assert(ctx);
+    assert(packet);
     debug_dump_frame("debug: client tx frame", (const u8 *)packet, frame_len);
     if (sendto(ctx->sockfd, packet, frame_len, 0, (struct sockaddr *)&ctx->saddr, sizeof(ctx->saddr)) < 0) {
-        perror("sendto");
+        log_error_errno("client_send", "sendto");
         return -1;
     }
     return 0;
@@ -185,17 +255,126 @@ static int client_send_payload(client_ctx_t *ctx, const void *payload, size_t pa
     return client_flush_packet(ctx, &packet, (size_t)frame_len);
 }
 
+static int client_send_hello(client_ctx_t *ctx, const client_args_t *args, u64 *nonce_out) {
+    const char *shell_cmd = (args && args->shell) ? args->shell : "sh";
+    const char *spawn_cmd = (args && args->spawn_cmd) ? args->spawn_cmd : "";
+    u8 payload[MAX_PAYLOAD_SIZE] = {0};
+    u64 nonce = client_generate_nonce();
+    hello_builder_t builder = {
+        .spawn_cmd = spawn_cmd,
+        .shell_cmd = shell_cmd,
+        .nonce = nonce,
+        .include_nonce = 1,
+    };
+    int hello_len = hello_build(payload, sizeof(payload), &builder);
+    if (hello_len < 0) {
+        log_error("client_hello", "event=build_failed");
+        return -1;
+    }
+    if (nonce_out)
+        *nonce_out = nonce;
+    return client_send_payload(ctx, payload, (size_t)hello_len);
+}
+
+static int client_wait_ready(client_ctx_t *ctx, u64 expected_nonce, u64 timeout_ns) {
+    u64 deadline = mono_ns() + timeout_ns;
+    pack_t pack;
+
+    while (1) {
+        u64 now = mono_ns();
+        if (now >= deadline)
+            return 1;
+
+        u64 rem = deadline - now;
+        struct timeval tv;
+        tv.tv_sec = (time_t)(rem / NSEC_PER_SEC);
+        tv.tv_usec = (suseconds_t)((rem % NSEC_PER_SEC) / NSEC_PER_USEC);
+        if (tv.tv_usec >= 1000000)
+            tv.tv_usec = 999999;
+
+        fd_set rfds;
+        FD_ZERO(&rfds);
+        FD_SET(ctx->sockfd, &rfds);
+
+        int rc = select(ctx->sockfd + 1, &rfds, NULL, NULL, &tv);
+        if (rc < 0) {
+            if (errno == EINTR)
+                continue;
+            log_error_errno("client_wait_ready", "select");
+            return -1;
+        }
+        if (rc == 0)
+            continue;
+
+        if (FD_ISSET(ctx->sockfd, &rfds)) {
+            ready_msg_t ready;
+            int payload_len = 0;
+            int got = client_recv_packet(ctx, &pack, &payload_len);
+            if (got < 0)
+                return -1;
+            if (got == 0)
+                continue;
+
+            if (parse_ready_message(pack.payload, (size_t)payload_len, &ready)) {
+                if (ready.have_nonce && ready.nonce == expected_nonce) {
+                    if (ready.from_userland)
+                        return 0;
+                    if (ready.from_kernel)
+                        return 2;
+                }
+                log_info("client_wait_ready",
+                         "event=ready_ignored expected=%016llx recv=%016llx has_nonce=%d src=userland:%d kernel:%d",
+                         (unsigned long long)expected_nonce,
+                         (unsigned long long)ready.nonce,
+                         ready.have_nonce,
+                         ready.from_userland,
+                         ready.from_kernel);
+                continue;
+            }
+
+            /* non-ready payload during handshake, ignore */
+        }
+    }
+}
+
+static int client_handshake(client_ctx_t *ctx, const client_args_t *args) {
+    const int max_attempts = 5;
+    int attempt = 0;
+
+    while (attempt < max_attempts) {
+        u64 nonce = 0;
+        if (client_send_hello(ctx, args, &nonce) != 0)
+            return -1;
+        int ready = client_wait_ready(ctx, nonce, RESPONSE_TIMEOUT_NS);
+        if (ready == 0)
+            return 0;
+        if (ready == 2) {
+            log_info("client_handshake", "event=kernel_ack nonce=%016llx", (unsigned long long)nonce);
+            attempt++;
+            continue;
+        }
+        if (ready < 0)
+            return -1;
+        log_error("client_handshake", "event=timeout attempt=%d", attempt + 1);
+        attempt++;
+    }
+
+    log_error("client_handshake", "event=ready_failed attempts=%d", max_attempts);
+    return -1;
+}
 static int client_handle_socket_event(client_ctx_t *ctx) {
+    assert(ctx);
     int rc = recv_once_and_print(ctx);
     return (rc < 0) ? -1 : 0;
 }
 
 static int client_handle_stdin_event(client_ctx_t *ctx) {
+    assert(ctx);
     u8 ibuf[MAX_PAYLOAD_SIZE];
     ssize_t r = read(STDIN_FILENO, ibuf, sizeof(ibuf));
     if (r < 0) {
         if (errno == EINTR) return 0;
-        perror("read");
+        log_error_errno("client_stdin", "read");
         return -1;
     }
     if (r == 0) return 0;
@@ -229,7 +408,7 @@ static int wait_resp(client_ctx_t *ctx, u64 deadline_ns) {
         if (rc < 0) {
             if (errno == EINTR)
                 continue;
-            perror("select");
+            log_error_errno("client_wait", "select");
             return -1;
         }
         if (rc == 0)
@@ -256,7 +435,7 @@ static int client_loop(client_ctx_t *ctx) {
         if (rc < 0) {
             if (errno == EINTR)
                 continue;
-            perror("select");
+            log_error_errno("client_loop", "select");
             return -1;
         }
 
@@ -289,6 +468,11 @@ static int parse_client_args(int argc, char **argv, client_args_t *args) {
             args->local_echo = 1;
             continue;
         }
+        if (matches(*argv, "--spawn")) {
+            NEXT_ARG();
+            args->spawn_cmd = *argv;
+            continue;
+        }
         if (!args->iface) {
             args->iface = *argv;
             continue;
@@ -305,7 +489,7 @@ static int parse_client_args(int argc, char **argv, client_args_t *args) {
             args->cmd = *argv;
             continue;
         }
-        fprintf(stderr, "error: unexpected arg '%s'\n", *argv);
+        log_error("client_args", "event=unexpected_arg value=%s", *argv);
         return -1;
     }
 
@@ -326,19 +510,16 @@ int main(int argc, char **argv) {
     if (client_ctx_init(&ctx, &a) != 0)
         return 1;
 
-    if (a.shell) {
-        size_t slen = strlen(a.shell) + 1;
-        if (client_send_payload(&ctx, a.shell, slen) != 0) {
-            client_ctx_deinit(&ctx);
-            return 1;
-        }
+    if (client_handshake(&ctx, &a) != 0) {
+        client_ctx_deinit(&ctx);
+        return 1;
     }
 
     if (a.cmd) {
         u8 buf[MAX_PAYLOAD_SIZE];
         size_t len = strlen(a.cmd);
         if (len + 1 > sizeof(buf)) {
-            fprintf(stderr, "error: command too long\n");
+            log_error("client_cmd", "event=command_too_long len=%zu", len);
             client_ctx_deinit(&ctx);
             return 1;
         }
@@ -357,7 +538,7 @@ int main(int argc, char **argv) {
         int seen = wait_resp(&ctx, dl);
         if (seen <= 0) {
             if (seen == 0)
-                fprintf(stderr, "error: no response within timeout\n");
+                log_error("client_wait", "event=no_response timeout_ns=%llu", (unsigned long long)RESPONSE_TIMEOUT_NS);
             client_ctx_deinit(&ctx);
             return 1;
         }
@@ -374,5 +555,5 @@ int main(int argc, char **argv) {
 
 /* usage printer */
 static void usage(const char *p) {
-    fprintf(stderr, "usage: %s [-e|--echo] [-h|--help] <iface> <server-mac> [shell] [cmd]\n", p);
+    fprintf(stderr, "usage: %s [-e|--echo] [--spawn <cmd>] [-h|--help] <iface> <server-mac> [shell] [cmd]\n", p);
 }
