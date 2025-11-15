@@ -10,6 +10,7 @@
 
 #include "cli_helper.h"
 #include "common.h"
+#include "frame_dedup.h"
 
 #include <arpa/inet.h>
 #include <assert.h>
@@ -30,23 +31,20 @@
 #include <time.h> //difftime
 #include <unistd.h>
 
-#define TIMEOUT 10
-#define SERVER_IDLE_TICKS 10
+#define TIMEOUT_SEC 5
+#define DELAY_SEC 1
+#define SERVER_IDLE_TICKS (TIMEOUT_SEC / DELAY_SEC)
 #define SERVER_DUP_RING 16
 #define SERVER_DUP_WINDOW_NS (2ULL * NSEC_PER_MSEC)
 
 int sh_fd = -1;
 volatile sig_atomic_t pid = -1;
-static packet_dedup_t server_rx_dedup;
-typedef struct server_frame_entry {
-    u64 ts_ns;
-    size_t len;
-    u32 checksum;
-    int ifindex;
-    int valid;
-} server_frame_entry_t;
-static server_frame_entry_t server_dup_ring[SERVER_DUP_RING];
-static size_t server_dup_cursor;
+static frame_dedup_entry_t server_dedup_slots[SERVER_DUP_RING];
+static frame_dedup_cache_t server_dedup = {
+    .slots = server_dedup_slots,
+    .capacity = SERVER_DUP_RING,
+    .cursor = 0,
+};
 
 typedef struct server_ctx server_ctx_t;
 
@@ -153,18 +151,6 @@ static int server_validate_mac(server_ctx_t *ctx, const packh_t *header) {
         return -1;
     if (memcmp(header->eth_hdr.ether_shost, ctx->ifr.ifr_hwaddr.sa_data, ETH_ALEN) == 0)
         return -1;
-    return 0;
-}
-
-static int server_check_dup(const packh_t *header, u32 payload_size_host, u32 signature_host) {
-    if (packet_dedup_handler(&server_rx_dedup,
-                                 (const u8 *)header->eth_hdr.ether_shost,
-                                 ntohl(header->crc),
-                                 payload_size_host,
-                                 signature_host,
-                                 PACKET_DEDUP_WINDOW_NS)) {
-        return -1;
-    }
     return 0;
 }
 
@@ -294,10 +280,6 @@ static ssize_t server_socket_event_handler(server_ctx_t *ctx, pack_t *packet) {
              signature_host,
              crc,
              peer_ifname);
-
-    if (server_check_dup(header, payload_size_host, signature_host) != 0) {
-        return -1;
-    }
 
     payload_size = parse_packet(packet, ret, CLIENT_SIGNATURE);
     if (payload_size < 0) {
@@ -493,7 +475,7 @@ static int server_loop(server_ctx_t *ctx) {
     int idle_ticks = 0;
 
     while (1) {
-        struct timeval tv = {.tv_sec = 1, .tv_usec = 0};
+        struct timeval tv = {.tv_sec = DELAY_SEC, .tv_usec = 0};
         FD_ZERO(&fds);
         FD_SET(ctx->sockfd, &fds);
         int max_fd = ctx->sockfd;
@@ -551,7 +533,7 @@ static int server_loop(server_ctx_t *ctx) {
 int server_main(int argc, char *argv[]) {
     server_args_t args;
     server_ctx_t ctx;
-    packet_dedup_init(&server_rx_dedup);
+    frame_dedup_reset(&server_dedup);
 
     int pr = parse_server_args(argc, argv, &args);
     if (pr != 0) return pr > 0 ? 0 : 1;
@@ -592,49 +574,42 @@ static u32 server_frame_fingerprint(const pack_t *packet, size_t len) {
     return crc ^ sig ^ psz;
 }
 
+// Проверяет, следует ли отбросить дубликат фрейма
 static int server_frame_dedup_should_drop(const pack_t *packet, size_t len, const struct sockaddr_ll *peer) {
     if (!packet || len == 0)
         return 0;
     const u64 now = server_mono_ns();
     const u32 checksum = server_frame_fingerprint(packet, len);
+    const int cur_ifindex = peer ? peer->sll_ifindex : 0;
     char cur_ifname[IFNAMSIZ];
-    server_format_ifname(peer ? peer->sll_ifindex : 0, cur_ifname);
+    int prev_ifindex = 0;
+    u64 age_ns = 0;
 
-    for (size_t i = 0; i < SERVER_DUP_RING; i++) {
-        server_frame_entry_t *entry = &server_dup_ring[i];
-        if (!entry->valid)
-            continue;
-        if (now > entry->ts_ns && now - entry->ts_ns > SERVER_DUP_WINDOW_NS) {
-            entry->valid = 0;
-            continue;
-        }
-        if (entry->len == len && entry->checksum == checksum && now - entry->ts_ns <= SERVER_DUP_WINDOW_NS) {
-            char prev_ifname[IFNAMSIZ];
-            server_format_ifname(entry->ifindex, prev_ifname);
-            u64 age_ns = now - entry->ts_ns;
-            log_info("server_dup",
-                     "event=drop len=%zu age_ns=%llu checksum=%u iface=%s prev_iface=%s",
-                     len,
-                     (unsigned long long)age_ns,
-                     checksum,
-                     cur_ifname,
-                     prev_ifname);
-            entry->ts_ns = now;
-            entry->ifindex = peer ? peer->sll_ifindex : entry->ifindex;
-            return -1;
-        }
+    server_format_ifname(cur_ifindex, cur_ifname);
+    if (!frame_dedup_should_drop(&server_dedup,
+                                 len,
+                                 checksum,
+                                 cur_ifindex,
+                                 now,
+                                 SERVER_DUP_WINDOW_NS,
+                                 &prev_ifindex,
+                                 &age_ns)) {
+        return 0;
     }
 
-    server_frame_entry_t *slot = &server_dup_ring[server_dup_cursor];
-    slot->ts_ns = now;
-    slot->len = len;
-    slot->checksum = checksum;
-    slot->ifindex = peer ? peer->sll_ifindex : 0;
-    slot->valid = 1;
-    server_dup_cursor = (server_dup_cursor + 1) % SERVER_DUP_RING;
-    return 0;
+    char prev_ifname[IFNAMSIZ];
+    server_format_ifname(prev_ifindex, prev_ifname);
+    log_info("server_dup",
+             "event=drop len=%zu age_ns=%llu checksum=%u iface=%s prev_iface=%s",
+             len,
+             (unsigned long long)age_ns,
+             checksum,
+             cur_ifname,
+             prev_ifname);
+    return -1;
 }
 
+// обработчик подтверждения nonce от клиента
 static int server_nonce_confirm_handler(server_ctx_t *ctx, const u8 *payload, size_t payload_size, const struct sockaddr_ll *peer) {
     if (!ctx || !payload || payload_size == 0 || !ctx->awaiting_nonce_confirm)
         return 0;

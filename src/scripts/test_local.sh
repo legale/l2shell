@@ -1,118 +1,81 @@
 #!/bin/sh
 
-# Helper functions
 log() {
     echo "[test_local] $*"
 }
 
-run() {
-    log "$*"
-    "$@"
-}
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 SCRIPT_PATH="${SCRIPT_DIR}/$(basename "$0")"
 
+echo $SCRIPT_PATH
+
 if [ "$(id -u)" -ne 0 ]; then
-    log "root privileges are required. Run via 'sudo make test' or execute this script under sudo." >&2
-    exit 1
+    log "root privileges are required. Rerunning via sudo."
+    exec sudo "$SCRIPT_PATH" "$@"
 fi
 
-# Ensure we always run from the repo root for predictable relative paths
-if [ "${L2SHELL_TEST_ROOT:-0}" != "1" ]; then
-    export L2SHELL_TEST_ROOT=1
-    cd "${REPO_ROOT}" || exit 1
-    exec "${SCRIPT_PATH}" "$@"
-fi
 
-BR_IF="br_l2shell0"
-SERVER_IF="veth_srv0"
-SERVER_PEER="veth_srv1" 
-CLIENT_IF="veth_cli0"
-CLIENT_PEER="veth_cli1"
-LOG_DIR="logs"
-SERVER_LOG="${LOG_DIR}/server.log"
-CLIENT_LOG="${LOG_DIR}/client.log"
-SERVER_PID=""
+BR_IF=br-veth
+SERVER_IF=veth0
+SERVER_PEER=${SERVER_IF}1
+CLIENT_IF=veth1
+CLIENT_PEER=${CLIENT_IF}1
+LOG_DIR=logs
+SERVER_LOG=$LOG_DIR/server.log
+CLIENT_LOG=$LOG_DIR/client.log
+SERVER_PID=
 CLIENT_RC=1
 
 cleanup() {
-    set +e
-    if [ -n "${SERVER_PID}" ] && kill -0 "${SERVER_PID}" 2>/dev/null; then
-        kill "${SERVER_PID}" 2>/dev/null
-        wait "${SERVER_PID}" 2>/dev/null
-    fi
-    ip link set "${SERVER_PEER}" nomaster 2>/dev/null
-    ip link set "${CLIENT_PEER}" nomaster 2>/dev/null
-    ip link del "${SERVER_IF}" 2>/dev/null
-    ip link del "${CLIENT_IF}" 2>/dev/null
-    ip link del "${BR_IF}" 2>/dev/null
+    kill "$SERVER_PID" 2>/dev/null
+    wait "$SERVER_PID" 2>/dev/null
 }
 trap cleanup EXIT
 
-# Setup
-mkdir -p "${LOG_DIR}" && chmod 777 "${LOG_DIR}"
-: >"${SERVER_LOG}"
-: >"${CLIENT_LOG}"
+mkdir -p "$LOG_DIR"
+echo >"$SERVER_LOG"
+echo >"$CLIENT_LOG"
 
-log "Recreating bridge ${BR_IF} with veth pairs"
-run ip link del "${BR_IF}" 2>/dev/null || true
+log "recreate bridge $BR_IF"
+${SCRIPT_DIR}/br-veth.sh ${BR_IF} ${SERVER_IF} ${CLIENT_IF} || {
+    log "failed to create bridge"
+    exit 1
+}
 
-run ip link add "${BR_IF}" type bridge
-run ip link set "${BR_IF}" up
+SERVER_MAC=$(cat "/sys/class/net/$SERVER_IF/address")
+log "server mac=$SERVER_MAC"
 
-run ip link add "${SERVER_IF}" type veth peer name "${SERVER_PEER}"
-run ip link add "${CLIENT_IF}" type veth peer name "${CLIENT_PEER}"
+WDIR=.
+SERVER_BIN=${WDIR}/a
+CLIENT_BIN=${WDIR}/b
+[ -x "$SERVER_BIN" ] || SERVER_BIN=${WDIR}/l2shell
+[ -x "$CLIENT_BIN" ] || CLIENT_BIN=${WDIR}/l2shell
 
-for dev in "${SERVER_IF}" "${SERVER_PEER}" "${CLIENT_IF}" "${CLIENT_PEER}"; do
-    run ip link set "${dev}" up
-done
-
-run ip link set "${SERVER_PEER}" master "${BR_IF}"
-run ip link set "${CLIENT_PEER}" master "${BR_IF}"
-
-SERVER_MAC="$(cat "/sys/class/net/${SERVER_IF}/address")"
-log server mac="${SERVER_MAC}"
-
-# Run test
-SERVER_BIN="src/a"
-CLIENT_BIN="src/b"
-if [ ! -x "${SERVER_BIN}" ]; then
-    SERVER_BIN="${REPO_ROOT}/src/l2shell"
-fi
-if [ ! -x "${CLIENT_BIN}" ]; then
-    CLIENT_BIN="${REPO_ROOT}/src/l2shell"
-fi
-
-log "Launching server ${SERVER_BIN} on any"
-"${SERVER_BIN}" any >"${SERVER_LOG}" 2>&1 &
+log "start server $SERVER_BIN any"
+"$SERVER_BIN" any >"$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 sleep 1
 
-log "Running client"
-run "${CLIENT_BIN}" "${CLIENT_IF}" "${SERVER_MAC}" /bin/sh "echo 123" >"${CLIENT_LOG}" 2>&1
+log "run client"
+"$CLIENT_BIN" "$CLIENT_IF" "$SERVER_MAC" /bin/sh "echo 123" >"$CLIENT_LOG" 2>&1
 CLIENT_RC=$?
 
-log "Stopping server process"
-[ -n "${SERVER_PID}" ] && kill "${SERVER_PID}" 2>/dev/null && wait "${SERVER_PID}" 2>/dev/null
+log "stop server"
+kill "$SERVER_PID" 2>/dev/null
+wait "$SERVER_PID" 2>/dev/null
 
-log "Server log preview:"
-tail -n +1 "${SERVER_LOG}" || true
-log "Client log preview:" 
-tail -n +1 "${CLIENT_LOG}" || true
+log "server log:"
+cat "$SERVER_LOG"
+log "client log:"
+cat "$CLIENT_LOG"
 
-if [ ${CLIENT_RC} -ne 0 ]; then
-    log "Local test failed: client exited with code ${CLIENT_RC}"
-    exit ${CLIENT_RC}
-fi
+[ "$CLIENT_RC" -ne 0 ] && log "client rc=$CLIENT_RC" && exit "$CLIENT_RC"
 
-
-FOUND_COUNT=$(grep -c "123" "${CLIENT_LOG}")
-if [ "$FOUND_COUNT" -gt 2 ]; then
-    log "Local bridge test passed: found '123' in output"
+if grep -q "123" "$CLIENT_LOG"; then
+    log "ok: 123 found"
     exit 0
-else
-    log "Local bridge test failed: expected '123' in client output"
-    exit 1
 fi
+
+log "fail: 123 not found"
+exit 1

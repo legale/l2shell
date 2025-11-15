@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 
 #include "common.h"
+#include "frame_dedup.h"
 #include "test_common_shared.h"
 #include "test_util.h"
 
@@ -41,7 +42,6 @@ static void test_hello_parse_rejects_bad_version(void) {
     PRINT_TEST_START("hello_parse_rejects_bad_version");
     u8 payload[1] = {HELLO_VERSION + 1};
     hello_view_t view;
-    PRINT_TEST_INFO("error is expected");
     TEST_ASSERT(hello_parse(payload, sizeof(payload), &view) < 0);
     PRINT_TEST_PASSED();
 }
@@ -50,7 +50,6 @@ static void test_hello_parse_rejects_truncated_tlv(void) {
     PRINT_TEST_START("hello_parse_rejects_truncated_tlv");
     u8 payload[4] = {HELLO_VERSION, HELLO_T_SHELL, 0x00, 0x04};
     hello_view_t view;
-    PRINT_TEST_INFO("error is expected");
     TEST_ASSERT(hello_parse(payload, sizeof(payload), &view) < 0);
     PRINT_TEST_PASSED();
 }
@@ -139,14 +138,53 @@ static void test_parse_rejects_signature_mismatch(void) {
     PRINT_TEST_PASSED();
 }
 
-static void test_packet_dedup_cache(void) {
-    PRINT_TEST_START("packet_dedup_cache");
-    packet_dedup_t cache;
-    u8 mac[ETH_ALEN] = {0x02, 0xff, 0xee, 0xdd, 0xcc, 0xbb};
-    packet_dedup_init(&cache);
+static void test_frame_dedup_same_iface(void) {
+    PRINT_TEST_START("frame_dedup_same_iface");
+    frame_dedup_entry_t slots[4];
+    frame_dedup_cache_t cache = {0};
+    frame_dedup_init(&cache, slots, ARRAY_SIZE(slots));
 
-    TEST_ASSERT(packet_dedup_handler(&cache, mac, 0xdeadbeef, 10, CLIENT_SIGNATURE, PACKET_DEDUP_WINDOW_NS) == 0);
-    TEST_ASSERT(packet_dedup_handler(&cache, mac, 0xdeadbeef, 10, CLIENT_SIGNATURE, PACKET_DEDUP_WINDOW_NS) == 1);
+    u64 now = 1000;
+    TEST_ASSERT(frame_dedup_should_drop(&cache, 60, 0x1234, 7, now, 10000, NULL, NULL) == 0);
+    now += 50;
+    TEST_ASSERT(frame_dedup_should_drop(&cache, 60, 0x1234, 7, now, 10000, NULL, NULL) == 0);
+    PRINT_TEST_PASSED();
+}
+
+static void test_frame_dedup_different_iface_drop(void) {
+    PRINT_TEST_START("frame_dedup_different_iface_drop");
+    frame_dedup_entry_t slots[4];
+    frame_dedup_cache_t cache = {0};
+    frame_dedup_init(&cache, slots, ARRAY_SIZE(slots));
+
+    u64 now = 500;
+    TEST_ASSERT(frame_dedup_should_drop(&cache, 80, 0x7777, 2, now, 10000, NULL, NULL) == 0);
+    int prev_ifindex = 0;
+    u64 age_ns = 0;
+    now += 25;
+    TEST_ASSERT(frame_dedup_should_drop(&cache, 80, 0x7777, 9, now, 10000, &prev_ifindex, &age_ns) == 1);
+    TEST_ASSERT(prev_ifindex == 2);
+    TEST_ASSERT(age_ns == 25);
+    PRINT_TEST_PASSED();
+}
+
+static void test_frame_dedup_expired_entry(void) {
+    PRINT_TEST_START("frame_dedup_expired_entry");
+    frame_dedup_entry_t slots[2];
+    frame_dedup_cache_t cache = {0};
+    frame_dedup_init(&cache, slots, ARRAY_SIZE(slots));
+
+    u64 now = 0;
+    const u64 window_ns = 10;
+    TEST_ASSERT(frame_dedup_should_drop(&cache, 32, 0x5555, 3, now, window_ns, NULL, NULL) == 0);
+    now += window_ns + 5;
+    TEST_ASSERT(frame_dedup_should_drop(&cache, 32, 0x5555, 4, now, window_ns, NULL, NULL) == 0);
+    PRINT_TEST_PASSED();
+}
+
+static void test_frame_dedup_null_cache(void) {
+    PRINT_TEST_START("frame_dedup_null_cache");
+    TEST_ASSERT(frame_dedup_should_drop(NULL, 1, 1, 1, 0, 1, NULL, NULL) == 0);
     PRINT_TEST_PASSED();
 }
 
@@ -158,7 +196,6 @@ static void test_build_packet_rejects_large_payload(void) {
 
     test_set_macs(src_mac, dst_mac);
     int rc = build_packet(&packet, MAX_PAYLOAD_SIZE + 1U, src_mac, dst_mac, CLIENT_SIGNATURE);
-    PRINT_TEST_INFO("error is expected");
     TEST_ASSERT(rc < 0);
     PRINT_TEST_PASSED();
 }
@@ -202,17 +239,6 @@ static void test_parse_packet_rejects_length_mismatch(void) {
     int rc = parse_packet(&packet, frame_len, CLIENT_SIGNATURE);
     TEST_ASSERT(rc < 0);
     PRINT_TEST_INFO("error is expected");
-    PRINT_TEST_PASSED();
-}
-
-static void test_dedup_accepts_different_crc(void) {
-    PRINT_TEST_START("dedup_accepts_different_crc");
-    packet_dedup_t cache;
-    u8 mac[ETH_ALEN] = {0x02, 0xff, 0x00, 0x00, 0x00, 0x04};
-    packet_dedup_init(&cache);
-
-    TEST_ASSERT(packet_dedup_handler(&cache, mac, 0xaaaaaaaa, 4, CLIENT_SIGNATURE, PACKET_DEDUP_WINDOW_NS) == 0);
-    TEST_ASSERT(packet_dedup_handler(&cache, mac, 0xbbbbbbbb, 4, CLIENT_SIGNATURE, PACKET_DEDUP_WINDOW_NS) == 0);
     PRINT_TEST_PASSED();
 }
 
@@ -297,29 +323,6 @@ static void test_parse_packet_payload_too_large(void) {
     PRINT_TEST_PASSED();
 }
 
-static void test_dedup_expired_entry(void) {
-    PRINT_TEST_START("dedup_expired_entry");
-    packet_dedup_t cache;
-    u8 mac[ETH_ALEN] = {0x10, 0x00, 0x00, 0x00, 0x00, 0x01};
-    packet_dedup_init(&cache);
-
-    TEST_ASSERT(packet_dedup_handler(&cache, mac, 0x1234, 8, CLIENT_SIGNATURE, 1) == 0);
-    packet_fingerprint_t *entry = &cache.entries[0];
-    entry->ts.tv_sec = 0;
-    entry->ts.tv_nsec = 0;
-    entry->valid = 1;
-    TEST_ASSERT(packet_dedup_handler(&cache, mac, 0x1234, 8, CLIENT_SIGNATURE, 1) == 0);
-    PRINT_TEST_PASSED();
-}
-
-static void test_dedup_null_args(void) {
-    PRINT_TEST_START("dedup_null_args");
-    u8 mac[ETH_ALEN] = {0};
-    TEST_ASSERT(packet_dedup_handler(NULL, mac, 0, 0, 0, 0) == 0);
-    TEST_ASSERT(packet_dedup_handler(&(packet_dedup_t){0}, NULL, 0, 0, 0, 0) == 0);
-    PRINT_TEST_PASSED();
-}
-
 static void test_debug_dump_frame_logs_prefix(void) {
     PRINT_TEST_START("debug_dump_frame_logs_prefix");
     const char *log_dir = "logs";
@@ -359,18 +362,18 @@ int main(int argc, char **argv) {
         {"build_and_parse_packet", test_build_and_parse_packet},
         {"build_packet_preserves_padding", test_build_packet_preserves_padding},
         {"parse_rejects_signature_mismatch", test_parse_rejects_signature_mismatch},
-        {"packet_dedup_cache", test_packet_dedup_cache},
+        {"frame_dedup_same_iface", test_frame_dedup_same_iface},
+        {"frame_dedup_different_iface_drop", test_frame_dedup_different_iface_drop},
+        {"frame_dedup_expired_entry", test_frame_dedup_expired_entry},
+        {"frame_dedup_null_cache", test_frame_dedup_null_cache},
         {"build_packet_rejects_large_payload", test_build_packet_rejects_large_payload},
         {"parse_packet_detects_crc_mismatch", test_parse_packet_detects_crc_mismatch},
         {"parse_packet_rejects_length_mismatch", test_parse_packet_rejects_length_mismatch},
-        {"dedup_accepts_different_crc", test_dedup_accepts_different_crc},
         {"build_packet_null_args", test_build_packet_null_args},
         {"build_packet_sets_fields", test_build_packet_sets_fields},
         {"parse_packet_rejects_wrong_ethertype", test_parse_packet_rejects_wrong_ethertype},
         {"parse_packet_rejects_truncated", test_parse_packet_rejects_truncated},
         {"parse_packet_payload_too_large", test_parse_packet_payload_too_large},
-        {"dedup_expired_entry", test_dedup_expired_entry},
-        {"dedup_null_args", test_dedup_null_args},
         {"debug_dump_frame_logs_prefix", test_debug_dump_frame_logs_prefix},
     };
 

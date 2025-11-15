@@ -70,6 +70,10 @@ test-unit: $(TEST_BINARIES)
 		$$target; \
 	done
 
+.PHONY: test-kernel
+test-kernel: $(BIN_MAIN) $(KMOD)
+	sudo ./scripts/test_kernel.sh
+
 # kmod targets
 .PHONY: kmod
 kmod: $(KMOD)

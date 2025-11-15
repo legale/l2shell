@@ -32,9 +32,6 @@
 #define SIGNATURE_LEN 4
 #define MAX_PAYLOAD_SIZE 1024
 #define ETHER_TYPE_CUSTOM 0x88B5
-#define PACKET_DEDUP_CACHE 32
-#define PACKET_DEDUP_WINDOW_NS 5000000ULL
-
 // unit conversion macros
 #ifndef NSEC_PER_USEC
 #define NSEC_PER_USEC 1000U
@@ -74,25 +71,9 @@ typedef struct my_packet {
     u8 payload[MAX_PAYLOAD_SIZE];
 } __attribute__((packed)) pack_t;
 
-typedef struct packet_fingerprint {
-    u8 mac[ETH_ALEN];
-    u32 crc;
-    u32 payload_size;
-    u32 signature;
-    struct timespec ts;
-    int valid;
-} packet_fingerprint_t;
-
-typedef struct packet_dedup_cache {
-    packet_fingerprint_t entries[PACKET_DEDUP_CACHE];
-    size_t cursor;
-} packet_dedup_t;
-
 void enc_dec(const u8 *input, u8 *output, const u8 *key, size_t len);
 int build_packet(pack_t *packet, size_t payload_size, const u8 src_mac[ETH_ALEN], const u8 dst_mac[ETH_ALEN], u32 signature);
 int parse_packet(pack_t *packet, ssize_t frame_len, u32 expected_signature);
-void packet_dedup_init(packet_dedup_t *cache);
-int packet_dedup_handler(packet_dedup_t *cache, const u8 mac[ETH_ALEN], u32 crc, u32 payload_size, u32 signature, u64 window_ns);
 
 void debug_dump_frame(const char *prefix, const u8 *data, size_t len);
 int init_packet_socket(int *sockfd, struct ifreq *ifr, struct sockaddr_ll *bind_addr, const char *iface, int bind_to_device);

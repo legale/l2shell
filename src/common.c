@@ -98,53 +98,6 @@ int parse_packet(pack_t *packet, ssize_t frame_len, u32 expected_signature) {
     return (int)payload_size;
 }
 
-void packet_dedup_init(packet_dedup_t *cache) {
-    if (!cache) return;
-    memset(cache, 0, sizeof(*cache));
-}
-
-static inline u64 timespec_to_ns(const struct timespec *ts) {
-    return (u64)ts->tv_sec * NSEC_PER_SEC + (u64)ts->tv_nsec;
-}
-
-int packet_dedup_handler(packet_dedup_t *cache, const u8 mac[ETH_ALEN],
-                             u32 crc, u32 payload_size, u32 signature,
-                             u64 window_ns) {
-    if (!cache || !mac) return 0;
-
-    struct timespec now;
-    clock_gettime(CLOCK_MONOTONIC, &now);
-    u64 now_ns = timespec_to_ns(&now);
-
-    for (size_t i = 0; i < PACKET_DEDUP_CACHE; i++) {
-        packet_fingerprint_t *entry = &cache->entries[i];
-        if (!entry->valid) continue;
-        u64 entry_ns = timespec_to_ns(&entry->ts);
-        if (now_ns > entry_ns && now_ns - entry_ns > window_ns) {
-            entry->valid = 0;
-            continue;
-        }
-        if (entry->valid &&
-            entry->crc == crc &&
-            entry->payload_size == payload_size &&
-            entry->signature == signature &&
-            memcmp(entry->mac, mac, ETH_ALEN) == 0) {
-            return 1;
-        }
-    }
-
-    packet_fingerprint_t *slot = &cache->entries[cache->cursor];
-    memcpy(slot->mac, mac, ETH_ALEN);
-    slot->crc = crc;
-    slot->payload_size = payload_size;
-    slot->signature = signature;
-    slot->ts = now;
-    slot->valid = 1;
-
-    cache->cursor = (cache->cursor + 1) % PACKET_DEDUP_CACHE;
-    return 0;
-}
-
 void debug_dump_frame(const char *prefix, const u8 *data, size_t len) {
     if (!data || !len) return;
 
