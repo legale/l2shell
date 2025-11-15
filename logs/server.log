@@ -1,0 +1,27 @@
+level=info tag=server_ctx event=iface_ready any
+level=info tag=server_rx b=51 ether=0x88b5 pay_sz=25 src=36:c0:6f:1e:5e:7a dst=52:1c:d2:f0:ab:bf sign=0xaabbccdd csum=4066 iface=veth_srv0
+level=info tag=server_shell forkpty execlp cmd='/bin/sh'
+level=info tag=server_shell started pid=262076 cmd='/bin/sh'
+level=info tag=server_ready event=sent nonce=6917fd5f1b0522dd has_nonce=1 iface=veth_srv0
+level=info tag=server_rx b=71 ether=0x88b5 pay_sz=45 src=52:1c:d2:f0:ab:bf dst=36:c0:6f:1e:5e:7a sign=0xddccbbaa csum=6588 iface=veth_cli0
+level=info tag=server_rx b=57 ether=0x88b5 pay_sz=31 src=36:c0:6f:1e:5e:7a dst=52:1c:d2:f0:ab:bf sign=0xaabbccdd csum=5191 iface=veth_srv0
+level=info tag=server_handshake event=nonce_confirmed nonce=6917fd5f1b0522dd iface=veth_srv0
+level=info tag=server_rx b=36 ether=0x88b5 pay_sz=10 src=36:c0:6f:1e:5e:7a dst=52:1c:d2:f0:ab:bf sign=0xaabbccdd csum=3243 iface=veth_srv0
+level=info tag=server_tx b=38 ether=0x88b5 pay_sz=12 src=52:1c:d2:f0:ab:bf dst=36:c0:6f:1e:5e:7a sign=0xddccbbaa csum=3269 iface=veth_srv0
+level=info tag=server_rx b=38 ether=0x88b5 pay_sz=12 src=52:1c:d2:f0:ab:bf dst=36:c0:6f:1e:5e:7a sign=0xddccbbaa csum=3269 iface=veth_cli0
+level=info tag=server_tx b=46 ether=0x88b5 pay_sz=20 src=52:1c:d2:f0:ab:bf dst=36:c0:6f:1e:5e:7a sign=0xddccbbaa csum=4531 iface=veth_srv0
+level=info tag=server_rx b=46 ether=0x88b5 pay_sz=20 src=52:1c:d2:f0:ab:bf dst=36:c0:6f:1e:5e:7a sign=0xddccbbaa csum=4531 iface=veth_cli0
+level=info tag=server_tx b=46 ether=0x88b5 pay_sz=20 src=52:1c:d2:f0:ab:bf dst=36:c0:6f:1e:5e:7a sign=0xddccbbaa csum=4370 iface=veth_srv0
+level=info tag=server_rx b=46 ether=0x88b5 pay_sz=20 src=52:1c:d2:f0:ab:bf dst=36:c0:6f:1e:5e:7a sign=0xddccbbaa csum=4370 iface=veth_cli0
+level=info tag=server_tx b=28 ether=0x88b5 pay_sz=2 src=52:1c:d2:f0:ab:bf dst=36:c0:6f:1e:5e:7a sign=0xddccbbaa csum=2646 iface=veth_srv0
+level=info tag=server_rx b=28 ether=0x88b5 pay_sz=2 src=52:1c:d2:f0:ab:bf dst=36:c0:6f:1e:5e:7a sign=0xddccbbaa csum=2646 iface=veth_cli0
+level=info tag=server_tx b=28 ether=0x88b5 pay_sz=2 src=52:1c:d2:f0:ab:bf dst=36:c0:6f:1e:5e:7a sign=0xddccbbaa csum=2698 iface=veth_srv0
+level=info tag=server_rx b=28 ether=0x88b5 pay_sz=2 src=52:1c:d2:f0:ab:bf dst=36:c0:6f:1e:5e:7a sign=0xddccbbaa csum=2698 iface=veth_cli0
+level=info tag=server_tx b=29 ether=0x88b5 pay_sz=3 src=52:1c:d2:f0:ab:bf dst=36:c0:6f:1e:5e:7a sign=0xddccbbaa csum=2780 iface=veth_srv0
+level=info tag=server_rx b=29 ether=0x88b5 pay_sz=3 src=52:1c:d2:f0:ab:bf dst=36:c0:6f:1e:5e:7a sign=0xddccbbaa csum=2780 iface=veth_cli0
+level=info tag=server_tx b=28 ether=0x88b5 pay_sz=2 src=52:1c:d2:f0:ab:bf dst=36:c0:6f:1e:5e:7a sign=0xddccbbaa csum=2646 iface=veth_srv0
+level=info tag=server_dup event=drop len=28 age_ns=1458676 checksum=3721179646 iface=veth_cli0 prev_iface=veth_cli0
+level=info tag=server_tx b=28 ether=0x88b5 pay_sz=2 src=52:1c:d2:f0:ab:bf dst=36:c0:6f:1e:5e:7a sign=0xddccbbaa csum=2698 iface=veth_srv0
+level=info tag=server_dup event=drop len=28 age_ns=601895 checksum=3721179426 iface=veth_cli0 prev_iface=veth_cli0
+level=info tag=server_tx b=28 ether=0x88b5 pay_sz=2 src=52:1c:d2:f0:ab:bf dst=36:c0:6f:1e:5e:7a sign=0xddccbbaa csum=2698 iface=veth_srv0
+level=info tag=server_dup event=drop len=28 age_ns=176191 checksum=3721179426 iface=veth_cli0 prev_iface=veth_cli0

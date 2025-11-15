@@ -3,6 +3,8 @@ a
 b
 a_static
 b_static
+l2shell
+l2shell_static
 
 # Build artifacts
 *.o

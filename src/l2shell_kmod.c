@@ -299,45 +299,47 @@ static int l2_rx(struct sk_buff *skb, struct net_device *dev, struct packet_type
         return NET_RX_SUCCESS;
     }
 
-    /* сначала расшифровываем payload, затем считаем crc так же, как в userland */
-    enc_dec((u8 *)(h + 1), (u8 *)(h + 1), (u8 *)&h->crc, psize);
-
     dump_frame("l2sh: rx frame ", (const u8 *)eth, ETH_HLEN + sizeof(*h) + psize);
 
-    /* вычисляем crc по ethernet-заголовку, нашему заголовку (crc=0) и payload */
-    {
-        struct chdr hdr_copy = *h;
-        hdr_copy.crc = 0;
-        crc_calc = csum32((const u8 *)eth, ETH_HLEN);
-        crc_calc += csum32((const u8 *)&hdr_copy, sizeof(hdr_copy));
-        if (psize > 0)
-            crc_calc += csum32((const u8 *)(h + 1), psize);
-    }
-
-    if (crc_calc != crc_recv) {
-        l2sh_info("crc mismatch src=%pM recv=%u calc=%u\n",
-                  eth->h_source, crc_recv, crc_calc);
-        return NET_RX_SUCCESS;
-    }
-
-    /* вычисляем crc по ethernet-заголовку, нашему заголовку (crc=0) и payload */
-    {
-        struct chdr hdr_copy = *h;
-        hdr_copy.crc = 0;
-        crc_calc = csum32((const u8 *)eth, ETH_HLEN);
-        crc_calc += csum32((const u8 *)&hdr_copy, sizeof(hdr_copy));
-        if (psize > 0)
-            crc_calc += csum32((const u8 *)(h + 1), psize);
-    }
-
-    if (crc_calc != crc_recv) {
-        l2sh_info("crc mismatch src=%pM recv=%u calc=%u\n",
-                  eth->h_source, crc_recv, crc_calc);
-        return NET_RX_SUCCESS;
-    }
-
     if (psize > 0)
+        enc_dec((u8 *)(h + 1), (u8 *)(h + 1), (u8 *)&h->crc, psize);
+
+    /* вычисляем crc по ethernet-заголовку, нашему заголовку (crc=0) и payload */
+    {
+        struct chdr hdr_copy = *h;
+        hdr_copy.crc = 0;
+        crc_calc = csum32((const u8 *)eth, ETH_HLEN);
+        crc_calc += csum32((const u8 *)&hdr_copy, sizeof(hdr_copy));
+        if (psize > 0)
+            crc_calc += csum32((const u8 *)(h + 1), psize);
+    }
+
+    if (crc_calc != crc_recv) {
+        l2sh_info("crc mismatch src=%pM recv=%u calc=%u\n",
+                  eth->h_source, crc_recv, crc_calc);
+        return NET_RX_SUCCESS;
+    }
+
+    /* вычисляем crc по ethernet-заголовку, нашему заголовку (crc=0) и payload */
+    {
+        struct chdr hdr_copy = *h;
+        hdr_copy.crc = 0;
+        crc_calc = csum32((const u8 *)eth, ETH_HLEN);
+        crc_calc += csum32((const u8 *)&hdr_copy, sizeof(hdr_copy));
+        if (psize > 0)
+            crc_calc += csum32((const u8 *)(h + 1), psize);
+    }
+
+    if (crc_calc != crc_recv) {
+        l2sh_info("crc mismatch src=%pM recv=%u calc=%u\n",
+                  eth->h_source, crc_recv, crc_calc);
+        return NET_RX_SUCCESS;
+    }
+
+    if (psize > 0) {
+        enc_dec((u8 *)(h + 1), (u8 *)(h + 1), (u8 *)&h->crc, psize);
         enc_dec((u8 *)(h + 1), (u8 *)(h + 1), zero_key, psize);
+    }
 
     memset(&hello, 0, sizeof(hello));
     if (psize > 0 && hello_parse((u8 *)(h + 1), (size_t)psize, &hello) == 0)

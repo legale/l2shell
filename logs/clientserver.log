@@ -1,0 +1,915 @@
+client tx frame len=51
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 19 00 00 10 81 01 01 10 81 02 00
+0020: 17 ae 62 69 7e ae 73 68 13 81 08 69 07 73 82 05
+0030: 47 e7 da
+server rx frame len=51
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 19 00 00 10 81 01 01 10 81 02 00
+0020: 17 ae 62 69 7e ae 73 68 13 81 08 69 07 73 82 05
+0030: 47 e7 da
+server tx frame len=71
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2d 00 00 19 27 72 65 78 43 79 20
+0020: 77 48 6e 63 7c 1a 36 39 28 10 66 32 21 15 30 35
+0030: 2c 10 36 36 7d 46 20 73 76 52 72 63 7c 1a 75 73
+0040: 7c 55 6c 61 77 43 0a
+server rx frame len=71
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2d 00 00 19 27 72 65 78 43 79 20
+0020: 77 48 6e 63 7c 1a 36 39 28 10 66 32 21 15 30 35
+0030: 2c 10 36 36 7d 46 20 73 76 52 72 63 7c 1a 75 73
+0040: 7c 55 6c 61 77 43 0a
+client_rx frame  len=71
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2d 00 00 19 27 72 65 78 43 79 20
+0020: 77 48 6e 63 7c 1a 36 39 28 10 66 32 21 15 30 35
+0030: 2c 10 36 36 7d 46 20 73 76 52 72 63 7c 1a 75 73
+0040: 7c 55 6c 61 77 43 0a
+client tx frame len=36
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 0a 00 00 0c ab 65 63 64 c4 20 31
+0020: 3e 98 0d 0a
+server rx frame len=36
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 0a 00 00 0c ab 65 63 64 c4 20 31
+0020: 3e 98 0d 0a
+server rx frame len=38
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 0c 00 00 0c c5 65 63 64 aa 20 31
+0020: 3e f6 0d 0a 01 cf
+client_rx frame  len=38
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 0c 00 00 0c c5 65 63 64 aa 20 31
+0020: 3e f6 0d 0a 01 cf
+server rx frame len=68
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 dd cc
+0010: bb aa 00 00 00 2a 00 00 18 9b 6c 65 6e fe 6c 3d
+0020: 71 f5 66 6f 38 ef 61 67 25 fe 78 65 7b bb 65 78
+0030: 7d f8 6c 70 38 f8 6d 64 25 bc 2f 62 71 f5 2f 73
+0040: 70 bc 0d 0a
+client_rx frame  len=33
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 07 00 00 0b 3e 23 20 3a 0c 33 0d
+0020: 01
+server rx frame len=33
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 07 00 00 0b 3e 23 20 3a 0c 33 0d
+0020: 01
+server rx frame len=28
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 dd cc
+0010: bb aa 00 00 00 02 00 00 0a 8a 23 20
+client_rx frame  len=28
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 02 00 00 0a 8a 23 20
+server rx frame len=28
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 02 00 00 0a 8a 23 20
+client_tx frame  len=51
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 19 00 00 10 c7 01 01 10 c7 02 00
+0020: 17 e8 62 69 7e e8 73 68 13 c7 08 69 07 34 88 3a
+0030: 16 37 af
+server_rx frame len=51
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 19 00 00 10 c7 01 01 10 c7 02 00
+0020: 17 e8 62 69 7e e8 73 68 13 c7 08 69 07 34 88 3a
+0030: 16 37 af
+server_tx ready ack frame len=71
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2d 00 00 19 85 72 65 78 e1 79 20
+0020: 77 ea 6e 63 7c b8 36 39 28 b2 66 33 21 bd 33 61
+0030: 29 b3 66 30 78 e3 20 73 76 f0 72 63 7c b8 75 73
+0040: 7c f7 6c 61 77 e1 0a
+client_rx frame  len=71
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2d 00 00 19 85 72 65 78 e1 79 20
+0020: 77 ea 6e 63 7c b8 36 39 28 b2 66 33 21 bd 33 61
+0030: 29 b3 66 30 78 e3 20 73 76 f0 72 63 7c b8 75 73
+0040: 7c f7 6c 61 77 e1 0a
+server_rx frame len=71
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2d 00 00 19 85 72 65 78 e1 79 20
+0020: 77 ea 6e 63 7c b8 36 39 28 b2 66 33 21 bd 33 61
+0030: 29 b3 66 30 78 e3 20 73 76 f0 72 63 7c b8 75 73
+0040: 7c f7 6c 61 77 e1 0a
+client_tx frame  len=36
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 0a 00 00 0c ab 65 63 64 c4 20 31
+0020: 3e 98 0d 0a
+server_rx frame len=36
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 0a 00 00 0c ab 65 63 64 c4 20 31
+0020: 3e 98 0d 0a
+server_tx frame len=38
+0000: 50 9a 30 ab fd 7f 00 00 50 a3 30 ab fd 7f 00 00
+0010: 5e 7a 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+0020: 00 00 00 00 00 00
+client_rx frame  len=38
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 0c 00 00 0c c5 65 63 64 aa 20 31
+0020: 3e f6 0d 0a 01 cf
+server_rx frame len=38
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 0c 00 00 0c c5 65 63 64 aa 20 31
+0020: 3e f6 0d 0a 01 cf
+server_tx frame len=68
+0000: 50 9a 30 ab fd 7f 00 00 50 a3 30 ab fd 7f 00 00
+0010: ab bf 00 00 5f 73 72 76 30 00 00 00 00 00 00 00
+0020: 00 00 00 00 00 00 00 00 a3 29 97 3b 44 00 00 00
+0030: 2a 00 00 00 00 00 00 00 00 8e 1d 94 14 00 00 00
+0040: 58 a5 30 ab
+server_rx frame len=68
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 dd cc
+0010: bb aa 00 00 00 2a 00 00 18 9b 6c 65 6e fe 6c 3d
+0020: 71 f5 66 6f 38 ef 61 67 25 fe 78 65 7b bb 65 78
+0030: 7d f8 6c 70 38 f8 6d 64 25 bc 2f 62 71 f5 2f 73
+0040: 70 bc 0d 0a
+server_tx frame len=35
+0000: 50 9a 30 ab fd 7f 00 00 50 a3 30 ab fd 7f 00 00
+0010: 5e 7a 00 00 5f 63 6c 69 30 00 00 00 00 00 00 00
+0020: 00 00 00
+client_rx frame  len=35
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 09 00 00 0b 84 23 20 3a b6 33 0d
+0020: 01 a7 20
+server_rx frame len=35
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 09 00 00 0b 84 23 20 3a b6 33 0d
+0020: 01 a7 20
+server_tx frame len=28
+0000: 50 9a 30 ab fd 7f 00 00 50 a3 30 ab fd 7f 00 00
+0010: ab bf 00 00 5f 73 72 76 30 00 00 00
+server_rx frame len=28
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 dd cc
+0010: bb aa 00 00 00 02 00 00 0a 8a 23 20
+client_tx frame  len=51
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 19 00 00 0f 41 01 01 0f 41 02 00
+0020: 08 6e 62 69 61 6e 73 68 0c 41 08 69 18 b7 07 1e
+0030: 96 47 18
+server_rx frame len=51
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 19 00 00 0f 41 01 01 0f 41 02 00
+0020: 08 6e 62 69 61 6e 73 68 0c 41 08 69 18 b7 07 1e
+0030: 96 47 18
+server_tx ready ack frame len=71
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2d 00 00 19 09 72 65 78 6d 79 20
+0020: 77 66 6e 63 7c 34 36 39 28 3e 66 36 29 3e 31 65
+0030: 20 30 30 36 28 31 20 73 76 7c 72 63 7c 34 75 73
+0040: 7c 7b 6c 61 77 6d 0a
+server_rx frame len=71
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2d 00 00 19 09 72 65 78 6d 79 20
+0020: 77 66 6e 63 7c 34 36 39 28 3e 66 36 29 3e 31 65
+0030: 20 30 30 36 28 31 20 73 76 7c 72 63 7c 34 75 73
+0040: 7c 7b 6c 61 77 6d 0a
+client_rx frame  len=71
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2d 00 00 19 09 72 65 78 6d 79 20
+0020: 77 66 6e 63 7c 34 36 39 28 3e 66 36 29 3e 31 65
+0030: 20 30 30 36 28 31 20 73 76 7c 72 63 7c 34 75 73
+0040: 7c 7b 6c 61 77 6d 0a
+client_tx frame  len=36
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 0a 00 00 0c ab 65 63 64 c4 20 31
+0020: 3e 98 0d 0a
+server_rx frame len=36
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 0a 00 00 0c ab 65 63 64 c4 20 31
+0020: 3e 98 0d 0a
+server_tx frame len=38
+0000: 10 39 4c ff fe 7f 00 00 10 42 4c ff fe 7f 00 00
+0010: 5e 7a 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+0020: 00 00 00 00 00 00
+server_rx frame len=38
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 0c 00 00 0c c5 65 63 64 aa 20 31
+0020: 3e f6 0d 0a 01 cf
+client_rx frame  len=38
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 0c 00 00 0c c5 65 63 64 aa 20 31
+0020: 3e f6 0d 0a 01 cf
+server_tx frame len=68
+0000: 10 39 4c ff fe 7f 00 00 10 42 4c ff fe 7f 00 00
+0010: ab bf 00 00 5f 73 72 76 30 00 00 00 00 00 00 00
+0020: 00 00 00 00 00 00 00 00 c8 73 97 3b 44 00 00 00
+0030: 2a 00 00 00 00 00 00 00 00 78 f3 8b 14 00 00 00
+0040: 18 44 4c ff
+server_rx frame len=68
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 dd cc
+0010: bb aa 00 00 00 2a 00 00 18 9b 6c 65 6e fe 6c 3d
+0020: 71 f5 66 6f 38 ef 61 67 25 fe 78 65 7b bb 65 78
+0030: 7d f8 6c 70 38 f8 6d 64 25 bc 2f 62 71 f5 2f 73
+0040: 70 bc 0d 0a
+server_tx frame len=31
+0000: 10 39 4c ff fe 7f 00 00 10 42 4c ff fe 7f 00 00
+0010: 5e 7a 00 00 5f 63 6c 69 30 00 00 00 00 00 00
+server_rx frame len=31
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 05 00 00 0b 28 23 20 3a 1a 33
+server_tx frame len=28
+0000: 10 39 4c ff fe 7f 00 00 10 42 4c ff fe 7f 00 00
+0010: ab bf 00 00 5f 73 72 76 30 00 00 00
+server_rx frame len=28
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 dd cc
+0010: bb aa 00 00 00 02 00 00 0a 56 0d 0a
+client_rx frame  len=31
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 05 00 00 0b 28 23 20 3a 1a 33
+server_tx frame len=30
+0000: 10 39 4c ff fe 7f 00 00 10 42 4c ff fe 7f 00 00
+0010: 5e 7a 00 00 5f 63 6c 69 30 00 00 00 00 00
+server_rx frame len=30
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 04 00 00 0a d0 23 20 29 f0
+client_rx frame  len=30
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 04 00 00 0a d0 23 20 29 f0
+client_tx frame  len=51
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 19 00 00 10 15 01 01 10 15 02 00
+0020: 17 3a 62 69 7e 3a 73 68 13 15 08 69 07 ed 17 14
+0030: c0 3f 8d
+server_rx frame len=51
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 19 00 00 10 15 01 01 10 15 02 00
+0020: 17 3a 62 69 7e 3a 73 68 13 15 08 69 07 ed 17 14
+0030: c0 3f 8d
+server_tx ready ack frame len=71
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2d 00 00 19 5f 72 65 78 3b 79 20
+0020: 77 30 6e 63 7c 62 36 39 28 68 66 38 28 68 31 34
+0030: 7d 6f 32 61 21 3b 20 73 76 2a 72 63 7c 62 75 73
+0040: 7c 2d 6c 61 77 3b 0a
+server_rx frame len=71
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2d 00 00 19 5f 72 65 78 3b 79 20
+0020: 77 30 6e 63 7c 62 36 39 28 68 66 38 28 68 31 34
+0030: 7d 6f 32 61 21 3b 20 73 76 2a 72 63 7c 62 75 73
+0040: 7c 2d 6c 61 77 3b 0a
+client_rx frame  len=71
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2d 00 00 19 5f 72 65 78 3b 79 20
+0020: 77 30 6e 63 7c 62 36 39 28 68 66 38 28 68 31 34
+0030: 7d 6f 32 61 21 3b 20 73 76 2a 72 63 7c 62 75 73
+0040: 7c 2d 6c 61 77 3b 0a
+client_tx frame  len=57
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 1f 00 00 13 fa 6e 6f 7d 99 65 5f
+0020: 70 95 6e 66 7a 88 6d 3d 25 c3 31 37 75 c2 31 37
+0030: 22 ce 64 30 21 9b 38 64 19
+client_tx frame  len=36
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 0a 00 00 0c ab 65 63 64 c4 20 31
+0020: 3e 98 0d 0a
+server_rx frame len=57
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 1f 00 00 13 fa 6e 6f 7d 99 65 5f
+0020: 70 95 6e 66 7a 88 6d 3d 25 c3 31 37 75 c2 31 37
+0030: 22 ce 64 30 21 9b 38 64 19
+server_tx frame len=68
+0000: e0 3e 25 9f fe 7f 00 00 e0 47 25 9f fe 7f 00 00
+0010: 5e 7a 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+0020: fa 13 00 00 dd cc bb aa 1f 00 00 00 44 00 00 00
+0030: 2a 00 00 00 00 00 00 00 39 00 00 00 14 00 00 00
+0040: f8 49 25 9f
+client_rx frame  len=68
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2a 00 00 18 9b 6c 65 6e fe 6c 3d
+0020: 71 f5 66 6f 38 ef 61 67 25 fe 78 65 7b bb 65 78
+0030: 7d f8 6c 70 38 f8 6d 64 25 bc 2f 62 71 f5 2f 73
+0040: 70 bc 0d 0a
+server_rx frame len=36
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 0a 00 00 0c ab 65 63 64 c4 20 31
+0020: 3e 98 0d 0a
+server_rx frame len=68
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2a 00 00 18 9b 6c 65 6e fe 6c 3d
+0020: 71 f5 66 6f 38 ef 61 67 25 fe 78 65 7b bb 65 78
+0030: 7d f8 6c 70 38 f8 6d 64 25 bc 2f 62 71 f5 2f 73
+0040: 70 bc 0d 0a
+server_tx frame len=38
+0000: e0 3e 25 9f fe 7f 00 00 e0 47 25 9f fe 7f 00 00
+0010: ab bf 00 00 5f 73 72 76 30 00 00 00 00 00 00 00
+0020: 00 00 00 00 00 00
+server_rx frame len=38
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 dd cc
+0010: bb aa 00 00 00 0c 00 00 0c c5 65 63 64 aa 20 31
+0020: 3e f6 0d 0a 01 cf
+server_tx frame len=37
+0000: e0 3e 25 9f fe 7f 00 00 e0 47 25 9f fe 7f 00 00
+0010: 5e 7a 00 00 5f 63 6c 69 30 00 00 00 00 00 00 00
+0020: 00 00 00 00 00
+client_rx frame  len=37
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 0b 00 00 0b ca 23 20 3a f8 33 0d
+0020: 01 e9 20 23 2b
+server_rx frame len=37
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 0b 00 00 0b ca 23 20 3a f8 33 0d
+0020: 01 e9 20 23 2b
+client_tx frame  len=51
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 19 00 00 0f 41 01 01 0f 41 02 00
+0020: 08 6e 62 69 61 6e 73 68 0c 41 08 69 18 b9 34 0f
+0030: 17 0d 35
+server_rx frame len=51
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 19 00 00 0f 41 01 01 0f 41 02 00
+0020: 08 6e 62 69 61 6e 73 68 0c 41 08 69 18 b9 34 0f
+0030: 17 0d 35
+server_tx ready ack frame len=71
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2d 00 00 19 28 72 65 78 4c 79 20
+0020: 77 47 6e 63 7c 15 36 39 28 1f 66 38 2a 1c 30 66
+0030: 28 10 34 63 2a 1d 20 73 76 5d 72 63 7c 15 75 73
+0040: 7c 5a 6c 61 77 4c 0a
+server_rx frame len=71
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2d 00 00 19 28 72 65 78 4c 79 20
+0020: 77 47 6e 63 7c 15 36 39 28 1f 66 38 2a 1c 30 66
+0030: 28 10 34 63 2a 1d 20 73 76 5d 72 63 7c 15 75 73
+0040: 7c 5a 6c 61 77 4c 0a
+server_tx frame len=68
+0000: 50 c4 c8 9b fe 7f 00 00 50 cd c8 9b fe 7f 00 00
+0010: ab bf 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+0020: 28 19 00 00 aa bb cc dd 2d 00 00 00 44 00 00 00
+0030: 2a 00 00 00 00 00 00 00 47 00 00 00 14 00 00 00
+0040: 68 cf c8 9b
+server_rx frame len=68
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 dd cc
+0010: bb aa 00 00 00 2a 00 00 18 9b 6c 65 6e fe 6c 3d
+0020: 71 f5 66 6f 38 ef 61 67 25 fe 78 65 7b bb 65 78
+0030: 7d f8 6c 70 38 f8 6d 64 25 bc 2f 62 71 f5 2f 73
+0040: 70 bc 0d 0a
+client_rx frame  len=71
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2d 00 00 19 28 72 65 78 4c 79 20
+0020: 77 47 6e 63 7c 15 36 39 28 1f 66 38 2a 1c 30 66
+0030: 28 10 34 63 2a 1d 20 73 76 5d 72 63 7c 15 75 73
+0040: 7c 5a 6c 61 77 4c 0a
+client_tx frame  len=57
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 1f 00 00 13 d3 6e 6f 7d b0 65 5f
+0020: 70 bc 6e 66 7a a1 6d 3d 25 ea 31 37 75 eb 33 34
+0030: 23 b5 31 38 27 b0 33 35 19
+server_rx frame len=57
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 1f 00 00 13 d3 6e 6f 7d b0 65 5f
+0020: 70 bc 6e 66 7a a1 6d 3d 25 ea 31 37 75 eb 33 34
+0030: 23 b5 31 38 27 b0 33 35 19
+client_tx frame  len=36
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 0a 00 00 0c ab 65 63 64 c4 20 31
+0020: 3e 98 0d 0a
+server_rx frame len=36
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 0a 00 00 0c ab 65 63 64 c4 20 31
+0020: 3e 98 0d 0a
+server_tx frame len=38
+0000: 50 c4 c8 9b fe 7f 00 00 50 cd c8 9b fe 7f 00 00
+0010: 5e 7a 00 00 5f 63 6c 69 30 00 00 00 00 00 00 00
+0020: 00 00 00 00 00 00
+server_rx frame len=38
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 0c 00 00 0c c5 65 63 64 aa 20 31
+0020: 3e f6 0d 0a 01 cf
+client_rx frame  len=38
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 0c 00 00 0c c5 65 63 64 aa 20 31
+0020: 3e f6 0d 0a 01 cf
+server_tx frame len=33
+0000: 50 c4 c8 9b fe 7f 00 00 50 cd c8 9b fe 7f 00 00
+0010: ab bf 00 00 5f 73 72 76 30 00 00 00 00 00 00 00
+0020: 00
+server_rx frame len=33
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 dd cc
+0010: bb aa 00 00 00 07 00 00 0b 3e 23 20 3a 0c 33 0d
+0020: 01
+server_tx frame len=30
+0000: 50 c4 c8 9b fe 7f 00 00 50 cd c8 9b fe 7f 00 00
+0010: 5e 7a 00 00 5f 63 6c 69 30 00 00 00 00 00
+server_rx frame len=30
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 04 00 00 0a d0 23 20 29 f0
+client_rx frame  len=30
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 04 00 00 0a d0 23 20 29 f0
+client_tx frame  len=51
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 19 00 00 10 1f 01 01 10 1f 02 00
+0020: 17 30 62 69 7e 30 73 68 13 1f 08 69 07 e7 39 07
+0030: 69 6e 82
+server_rx frame len=51
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 19 00 00 10 1f 01 01 10 1f 02 00
+0020: 17 30 62 69 7e 30 73 68 13 1f 08 69 07 e7 39 07
+0030: 69 6e 82
+server_tx ready ack frame len=71
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2d 00 00 18 d0 72 65 79 b4 79 20
+0020: 76 bf 6e 63 7d ed 36 39 29 e7 66 38 2b e9 30 37
+0030: 2f e9 37 31 20 e2 20 73 77 a5 72 63 7d ed 75 73
+0040: 7d a2 6c 61 76 b4 0a
+server_rx frame len=71
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2d 00 00 18 d0 72 65 79 b4 79 20
+0020: 76 bf 6e 63 7d ed 36 39 29 e7 66 38 2b e9 30 37
+0030: 2f e9 37 31 20 e2 20 73 77 a5 72 63 7d ed 75 73
+0040: 7d a2 6c 61 76 b4 0a
+server_tx frame len=68
+0000: 20 fb 78 25 fe 7f 00 00 20 04 79 25 fe 7f 00 00
+0010: ab bf 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+0020: d0 18 00 00 aa bb cc dd 2d 00 00 00 44 00 00 00
+0030: 2a 00 00 00 00 00 00 00 47 00 00 00 14 00 00 00
+0040: 38 06 79 25
+server_rx frame len=68
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2a 00 00 18 9b 6c 65 6e fe 6c 3d
+0020: 71 f5 66 6f 38 ef 61 67 25 fe 78 65 7b bb 65 78
+0030: 7d f8 6c 70 38 f8 6d 64 25 bc 2f 62 71 f5 2f 73
+0040: 70 bc 0d 0a
+client_rx frame  len=71
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2d 00 00 18 d0 72 65 79 b4 79 20
+0020: 76 bf 6e 63 7d ed 36 39 29 e7 66 38 2b e9 30 37
+0030: 2f e9 37 31 20 e2 20 73 77 a5 72 63 7d ed 75 73
+0040: 7d a2 6c 61 76 b4 0a
+client_tx frame  len=57
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 1f 00 00 13 77 6e 6f 7d 14 65 5f
+0020: 70 18 6e 66 7a 05 6d 3d 25 4e 31 37 75 4f 33 39
+0030: 23 40 37 39 24 46 38 32 19
+server_rx frame len=57
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 1f 00 00 13 77 6e 6f 7d 14 65 5f
+0020: 70 18 6e 66 7a 05 6d 3d 25 4e 31 37 75 4f 33 39
+0030: 23 40 37 39 24 46 38 32 19
+client_tx frame  len=36
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 0a 00 00 0c ab 65 63 64 c4 20 31
+0020: 3e 98 0d 0a
+server_rx frame len=36
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 0a 00 00 0c ab 65 63 64 c4 20 31
+0020: 3e 98 0d 0a
+server_tx frame len=38
+0000: 20 fb 78 25 fe 7f 00 00 20 04 79 25 fe 7f 00 00
+0010: 5e 7a 00 00 5f 73 72 76 30 00 00 00 00 00 00 00
+0020: 00 00 00 00 00 00
+server_rx frame len=38
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 0c 00 00 0c c5 65 63 64 aa 20 31
+0020: 3e f6 0d 0a 01 cf
+client_rx frame  len=68
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2a 00 00 18 9b 6c 65 6e fe 6c 3d
+0020: 71 f5 66 6f 38 ef 61 67 25 fe 78 65 7b bb 65 78
+0030: 7d f8 6c 70 38 f8 6d 64 25 bc 2f 62 71 f5 2f 73
+0040: 70 bc 0d 0a
+client_rx frame  len=38
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 0c 00 00 0c c5 65 63 64 aa 20 31
+0020: 3e f6 0d 0a 01 cf
+server_tx frame len=28
+0000: 20 fb 78 25 fe 7f 00 00 20 04 79 25 fe 7f 00 00
+0010: ab bf 00 00 5f 73 72 76 30 00 00 00
+server_rx frame len=28
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 02 00 00 0a 8a 23 20
+server_tx frame len=35
+0000: 20 fb 78 25 fe 7f 00 00 20 04 79 25 fe 7f 00 00
+0010: ab bf 00 00 5f 73 72 76 30 00 00 00 00 00 00 00
+0020: 8a 0a 00
+server_rx frame len=35
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 09 00 00 0b 86 31 32 38 8b 0a 23
+0020: 2b a5 20
+client_rx frame  len=28
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 02 00 00 0a 8a 23 20
+client_rx frame  len=35
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 09 00 00 0b 86 31 32 38 8b 0a 23
+0020: 2b a5 20
+client_tx frame  len=51
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 19 00 00 10 15 01 01 10 15 02 00
+0020: 17 3a 62 69 7e 3a 73 68 13 15 08 69 07 ed 44 16
+0030: 15 a6 9a
+server_rx frame len=51
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 19 00 00 10 15 01 01 10 15 02 00
+0020: 17 3a 62 69 7e 3a 73 68 13 15 08 69 07 ed 44 16
+0030: 15 a6 9a
+server_tx ready ack frame len=71
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2d 00 00 19 34 72 65 78 50 79 20
+0020: 77 5b 6e 63 7c 09 36 39 28 03 66 38 2d 00 31 36
+0030: 29 01 62 33 20 55 20 73 76 41 72 63 7c 09 75 73
+0040: 7c 46 6c 61 77 50 0a
+client_rx frame  len=71
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2d 00 00 19 34 72 65 78 50 79 20
+0020: 77 5b 6e 63 7c 09 36 39 28 03 66 38 2d 00 31 36
+0030: 29 01 62 33 20 55 20 73 76 41 72 63 7c 09 75 73
+0040: 7c 46 6c 61 77 50 0a
+server_rx frame len=71
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2d 00 00 19 34 72 65 78 50 79 20
+0020: 77 5b 6e 63 7c 09 36 39 28 03 66 38 2d 00 31 36
+0030: 29 01 62 33 20 55 20 73 76 41 72 63 7c 09 75 73
+0040: 7c 46 6c 61 77 50 0a
+client_tx frame  len=57
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 1f 00 00 13 c3 6e 6f 7d a0 65 5f
+0020: 70 ac 6e 66 7a b1 6d 3d 25 fa 31 37 75 fb 34 34
+0030: 22 f5 30 35 71 f0 39 61 19
+client_tx frame  len=36
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 0a 00 00 0c ab 65 63 64 c4 20 31
+0020: 3e 98 0d 0a
+server_tx frame len=68
+0000: 40 6e 3f fb fc 7f 00 00 40 77 3f fb fc 7f 00 00
+0010: ab bf 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+0020: 34 19 00 00 aa bb cc dd 2d 00 00 00 44 00 00 00
+0030: 2a 00 00 00 00 00 00 00 47 00 00 00 14 00 00 00
+0040: 58 79 3f fb
+client_rx frame  len=68
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2a 00 00 18 9b 6c 65 6e fe 6c 3d
+0020: 71 f5 66 6f 38 ef 61 67 25 fe 78 65 7b bb 65 78
+0030: 7d f8 6c 70 38 f8 6d 64 25 bc 2f 62 71 f5 2f 73
+0040: 70 bc 0d 0a
+server_rx frame len=57
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 1f 00 00 13 c3 6e 6f 7d a0 65 5f
+0020: 70 ac 6e 66 7a b1 6d 3d 25 fa 31 37 75 fb 34 34
+0030: 22 f5 30 35 71 f0 39 61 19
+server_rx frame len=36
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 0a 00 00 0c ab 65 63 64 c4 20 31
+0020: 3e 98 0d 0a
+server_rx frame len=68
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2a 00 00 18 9b 6c 65 6e fe 6c 3d
+0020: 71 f5 66 6f 38 ef 61 67 25 fe 78 65 7b bb 65 78
+0030: 7d f8 6c 70 38 f8 6d 64 25 bc 2f 62 71 f5 2f 73
+0040: 70 bc 0d 0a
+server_tx frame len=38
+0000: 40 6e 3f fb fc 7f 00 00 40 77 3f fb fc 7f 00 00
+0010: ab bf 00 00 5f 73 72 76 30 00 00 00 00 00 00 00
+0020: 00 00 00 00 00 00
+client_rx frame  len=38
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 0c 00 00 0c c5 65 63 64 aa 20 31
+0020: 3e f6 0d 0a 01 cf
+server_rx frame len=38
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 0c 00 00 0c c5 65 63 64 aa 20 31
+0020: 3e f6 0d 0a 01 cf
+server_tx frame len=37
+0000: 40 6e 3f fb fc 7f 00 00 40 77 3f fb fc 7f 00 00
+0010: ab bf 00 00 5f 73 72 76 30 00 00 00 00 00 00 00
+0020: 00 00 00 00 00
+client_rx frame  len=37
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 0b 00 00 0b ca 23 20 3a f8 33 0d
+0020: 01 e9 20 23 2b
+server_rx frame len=37
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 0b 00 00 0b ca 23 20 3a f8 33 0d
+0020: 01 e9 20 23 2b
+client_tx frame  len=51
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 19 00 00 10 51 01 01 10 51 02 00
+0020: 17 7e 62 69 7e 7e 73 68 13 51 08 69 07 ab 06 1b
+0030: 14 b6 e0
+server_rx frame len=51
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 19 00 00 10 51 01 01 10 51 02 00
+0020: 17 7e 62 69 7e 7e 73 68 13 51 08 69 07 ab 06 1b
+0030: 14 b6 e0
+server_tx ready ack frame len=71
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2d 00 00 19 7e 72 65 78 1a 79 20
+0020: 77 11 6e 63 7c 43 36 39 28 49 66 61 29 48 31 62
+0030: 29 4a 65 37 7c 4e 20 73 76 0b 72 63 7c 43 75 73
+0040: 7c 0c 6c 61 77 1a 0a
+server_rx frame len=71
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2d 00 00 19 7e 72 65 78 1a 79 20
+0020: 77 11 6e 63 7c 43 36 39 28 49 66 61 29 48 31 62
+0030: 29 4a 65 37 7c 4e 20 73 76 0b 72 63 7c 43 75 73
+0040: 7c 0c 6c 61 77 1a 0a
+server_tx frame len=68
+0000: 40 72 09 75 ff 7f 00 00 40 7b 09 75 ff 7f 00 00
+0010: ab bf 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+0020: 7e 19 00 00 aa bb cc dd 2d 00 00 00 44 00 00 00
+0030: 2a 00 00 00 00 00 00 00 47 00 00 00 14 00 00 00
+0040: 58 7d 09 75
+server_rx frame len=68
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2a 00 00 18 9b 6c 65 6e fe 6c 3d
+0020: 71 f5 66 6f 38 ef 61 67 25 fe 78 65 7b bb 65 78
+0030: 7d f8 6c 70 38 f8 6d 64 25 bc 2f 62 71 f5 2f 73
+0040: 70 bc 0d 0a
+client_rx frame  len=71
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2d 00 00 19 7e 72 65 78 1a 79 20
+0020: 77 11 6e 63 7c 43 36 39 28 49 66 61 29 48 31 62
+0030: 29 4a 65 37 7c 4e 20 73 76 0b 72 63 7c 43 75 73
+0040: 7c 0c 6c 61 77 1a 0a
+client_tx frame  len=57
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 1f 00 00 14 1d 6e 6f 7a 7e 65 5f
+0020: 77 72 6e 66 7d 6f 6d 3d 22 24 31 37 72 7c 30 36
+0030: 25 7f 30 34 71 2a 65 30 1e
+server_rx frame len=57
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 1f 00 00 14 1d 6e 6f 7a 7e 65 5f
+0020: 77 72 6e 66 7d 6f 6d 3d 22 24 31 37 72 7c 30 36
+0030: 25 7f 30 34 71 2a 65 30 1e
+client_tx frame  len=36
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 0a 00 00 0c ab 65 63 64 c4 20 31
+0020: 3e 98 0d 0a
+server_rx frame len=36
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 0a 00 00 0c ab 65 63 64 c4 20 31
+0020: 3e 98 0d 0a
+server_tx frame len=38
+0000: 40 72 09 75 ff 7f 00 00 40 7b 09 75 ff 7f 00 00
+0010: 5e 7a 00 00 5f 73 72 76 30 00 00 00 00 00 00 00
+0020: 00 00 00 00 00 00
+server_rx frame len=38
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 0c 00 00 0c c5 65 63 64 aa 20 31
+0020: 3e f6 0d 0a 01 cf
+client_rx frame  len=68
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2a 00 00 18 9b 6c 65 6e fe 6c 3d
+0020: 71 f5 66 6f 38 ef 61 67 25 fe 78 65 7b bb 65 78
+0030: 7d f8 6c 70 38 f8 6d 64 25 bc 2f 62 71 f5 2f 73
+0040: 70 bc 0d 0a
+client_rx frame  len=38
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 0c 00 00 0c c5 65 63 64 aa 20 31
+0020: 3e f6 0d 0a 01 cf
+server_tx frame len=33
+0000: 40 72 09 75 ff 7f 00 00 40 7b 09 75 ff 7f 00 00
+0010: ab bf 00 00 5f 73 72 76 30 00 00 00 00 00 00 00
+0020: 00
+server_rx frame len=33
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 07 00 00 0b 3e 23 20 3a 0c 33 0d
+0020: 01
+server_tx frame len=30
+0000: 40 72 09 75 ff 7f 00 00 40 7b 09 75 ff 7f 00 00
+0010: ab bf 00 00 5f 73 72 76 30 00 00 00 00 00
+server_rx frame len=30
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 04 00 00 0a d0 23 20 29 f0
+client_rx frame  len=33
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 07 00 00 0b 3e 23 20 3a 0c 33 0d
+0020: 01
+client_rx frame  len=30
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 04 00 00 0a d0 23 20 29 f0
+client_tx frame  len=51
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 19 00 00 10 10 01 01 10 10 02 00
+0020: 17 3f 62 69 7e 3f 73 68 13 10 08 69 07 eb 79 2f
+0030: 9b 13 72
+server_rx frame len=51
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 19 00 00 10 10 01 01 10 10 02 00
+0020: 17 3f 62 69 7e 3f 73 68 13 10 08 69 07 eb 79 2f
+0030: 9b 13 72
+server_tx ready ack frame len=71
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2d 00 00 19 5b 72 65 78 3f 79 20
+0020: 77 34 6e 63 7c 66 36 39 28 6c 66 62 2e 62 32 66
+0030: 21 39 30 33 2e 69 20 73 76 2e 72 63 7c 66 75 73
+0040: 7c 29 6c 61 77 3f 0a
+client_rx frame  len=71
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2d 00 00 19 5b 72 65 78 3f 79 20
+0020: 77 34 6e 63 7c 66 36 39 28 6c 66 62 2e 62 32 66
+0030: 21 39 30 33 2e 69 20 73 76 2e 72 63 7c 66 75 73
+0040: 7c 29 6c 61 77 3f 0a
+server_rx frame len=71
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2d 00 00 19 5b 72 65 78 3f 79 20
+0020: 77 34 6e 63 7c 66 36 39 28 6c 66 62 2e 62 32 66
+0030: 21 39 30 33 2e 69 20 73 76 2e 72 63 7c 66 75 73
+0040: 7c 29 6c 61 77 3f 0a
+client_tx frame  len=57
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 1f 00 00 13 ee 6e 6f 7d 8d 65 5f
+0020: 70 81 6e 66 7a 9c 6d 3d 25 d7 31 37 75 8c 37 39
+0030: 21 88 38 62 23 dd 37 32 19
+client_tx frame  len=36
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 0a 00 00 0c ab 65 63 64 c4 20 31
+0020: 3e 98 0d 0a
+server_tx frame len=68
+0000: 20 7d 80 86 fc 7f 00 00 20 86 80 86 fc 7f 00 00
+0010: ab bf 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+0020: 5b 19 00 00 aa bb cc dd 2d 00 00 00 44 00 00 00
+0030: 2a 00 00 00 00 00 00 00 47 00 00 00 14 00 00 00
+0040: 38 88 80 86
+server_rx frame len=57
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 1f 00 00 13 ee 6e 6f 7d 8d 65 5f
+0020: 70 81 6e 66 7a 9c 6d 3d 25 d7 31 37 75 8c 37 39
+0030: 21 88 38 62 23 dd 37 32 19
+server_rx frame len=36
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 0a 00 00 0c ab 65 63 64 c4 20 31
+0020: 3e 98 0d 0a
+server_rx frame len=68
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2a 00 00 18 9b 6c 65 6e fe 6c 3d
+0020: 71 f5 66 6f 38 ef 61 67 25 fe 78 65 7b bb 65 78
+0030: 7d f8 6c 70 38 f8 6d 64 25 bc 2f 62 71 f5 2f 73
+0040: 70 bc 0d 0a
+server_tx frame len=38
+0000: 20 7d 80 86 fc 7f 00 00 20 86 80 86 fc 7f 00 00
+0010: ab bf 00 00 5f 73 72 76 30 00 00 00 00 00 00 00
+0020: 00 00 00 00 00 00
+server_rx frame len=38
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 0c 00 00 0c c5 65 63 64 aa 20 31
+0020: 3e f6 0d 0a 01 cf
+client_rx frame  len=68
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2a 00 00 18 9b 6c 65 6e fe 6c 3d
+0020: 71 f5 66 6f 38 ef 61 67 25 fe 78 65 7b bb 65 78
+0030: 7d f8 6c 70 38 f8 6d 64 25 bc 2f 62 71 f5 2f 73
+0040: 70 bc 0d 0a
+client_rx frame  len=38
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 0c 00 00 0c c5 65 63 64 aa 20 31
+0020: 3e f6 0d 0a 01 cf
+server_tx frame len=28
+0000: 20 7d 80 86 fc 7f 00 00 20 86 80 86 fc 7f 00 00
+0010: ab bf 00 00 5f 73 72 76 30 00 00 00
+server_rx frame len=28
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 02 00 00 0a 8a 23 20
+server_tx frame len=35
+0000: 20 7d 80 86 fc 7f 00 00 20 86 80 86 fc 7f 00 00
+0010: ab bf 00 00 5f 73 72 76 30 00 00 00 00 00 00 00
+0020: 8a 0a 00
+server_rx frame len=35
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 09 00 00 0b 86 31 32 38 8b 0a 23
+0020: 2b a5 20
+client_rx frame  len=28
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 02 00 00 0a 8a 23 20
+client_rx frame  len=35
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 09 00 00 0b 86 31 32 38 8b 0a 23
+0020: 2b a5 20
+client_tx frame  len=51
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 19 00 00 0f e2 01 01 0f e2 02 00
+0020: 08 cd 62 69 61 cd 73 68 0c e2 08 69 18 1f 5f 1b
+0030: 0a c0 dd
+server_rx frame len=51
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 19 00 00 0f e2 01 01 0f e2 02 00
+0020: 08 cd 62 69 61 cd 73 68 0c e2 08 69 18 1f 5f 1b
+0030: 0a c0 dd
+server_tx ready ack frame len=71
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2d 00 00 19 bc 72 65 78 d8 79 20
+0020: 77 d3 6e 63 7c 81 36 39 28 8b 66 64 2c da 31 62
+0030: 29 89 32 32 7d d8 20 73 76 c9 72 63 7c 81 75 73
+0040: 7c ce 6c 61 77 d8 0a
+server_rx frame len=71
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2d 00 00 19 bc 72 65 78 d8 79 20
+0020: 77 d3 6e 63 7c 81 36 39 28 8b 66 64 2c da 31 62
+0030: 29 89 32 32 7d d8 20 73 76 c9 72 63 7c 81 75 73
+0040: 7c ce 6c 61 77 d8 0a
+client_rx frame  len=71
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 2d 00 00 19 bc 72 65 78 d8 79 20
+0020: 77 d3 6e 63 7c 81 36 39 28 8b 66 64 2c da 31 62
+0030: 29 89 32 32 7d d8 20 73 76 c9 72 63 7c 81 75 73
+0040: 7c ce 6c 61 77 d8 0a
+client_tx frame  len=57
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 1f 00 00 14 47 6e 6f 7a 24 65 5f
+0020: 77 28 6e 66 7d 35 6d 3d 22 7e 31 37 72 23 35 66
+0030: 25 25 30 35 26 75 64 64 1e
+server_rx frame len=57
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 1f 00 00 14 47 6e 6f 7a 24 65 5f
+0020: 77 28 6e 66 7d 35 6d 3d 22 7e 31 37 72 23 35 66
+0030: 25 25 30 35 26 75 64 64 1e
+client_tx frame  len=36
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 0a 00 00 0c ab 65 63 64 c4 20 31
+0020: 3e 98 0d 0a
+server_rx frame len=36
+0000: 52 1c d2 f0 ab bf 36 c0 6f 1e 5e 7a 88 b5 aa bb
+0010: cc dd 00 00 00 0a 00 00 0c ab 65 63 64 c4 20 31
+0020: 3e 98 0d 0a
+server_tx frame len=38
+0000: 20 15 e0 4a fe 7f 00 00 20 1e e0 4a fe 7f 00 00
+0010: 5e 7a 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+0020: 00 00 00 00 00 00
+server_rx frame len=38
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 0c 00 00 0c c5 65 63 64 aa 20 31
+0020: 3e f6 0d 0a 01 cf
+client_rx frame  len=38
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 0c 00 00 0c c5 65 63 64 aa 20 31
+0020: 3e f6 0d 0a 01 cf
+server_tx frame len=46
+0000: 20 15 e0 4a fe 7f 00 00 20 1e e0 4a fe 7f 00 00
+0010: ab bf 00 00 5f 73 72 76 30 00 00 00 00 00 00 00
+0020: 00 00 00 00 00 00 00 00 2e dc 97 3b 2e 00
+server_rx frame len=46
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 14 00 00 11 b3 6c 65 67 d6 6c 3d
+0020: 78 dd 66 6f 31 c7 61 67 2c d6 78 65 72 93
+client_rx frame  len=46
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 14 00 00 11 b3 6c 65 67 d6 6c 3d
+0020: 78 dd 66 6f 31 c7 61 67 2c d6 78 65 72 93
+server_tx frame len=46
+0000: 20 15 e0 4a fe 7f 00 00 20 1e e0 4a fe 7f 00 00
+0010: ab bf 00 00 5f 73 72 76 30 00 00 00 00 00 00 00
+0020: 00 00 00 00 00 00 00 00 0b e5 99 3b 2e 00
+server_rx frame len=46
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 14 00 00 11 12 65 78 74 71 6c 70
+0020: 31 71 6d 64 2c 35 2f 62 78 7c 2f 73 79 35
+client_rx frame  len=46
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 14 00 00 11 12 65 78 74 71 6c 70
+0020: 31 71 6d 64 2c 35 2f 62 78 7c 2f 73 79 35
+server_tx frame len=28
+0000: 20 15 e0 4a fe 7f 00 00 20 1e e0 4a fe 7f 00 00
+0010: ab bf 00 00 5f 73 72 76 30 00 00 00
+server_rx frame len=28
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 02 00 00 0a 56 0d 0a
+client_rx frame  len=28
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 02 00 00 0a 56 0d 0a
+server_tx frame len=28
+0000: 20 15 e0 4a fe 7f 00 00 20 1e e0 4a fe 7f 00 00
+0010: ab bf 00 00 5f 73 72 76 30 00 00 00
+server_rx frame len=28
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 02 00 00 0a 8a 23 20
+client_rx frame  len=28
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 02 00 00 0a 8a 23 20
+server_tx frame len=29
+0000: 20 15 e0 4a fe 7f 00 00 20 1e e0 4a fe 7f 00 00
+0010: ab bf 00 00 5f 73 72 76 30 00 00 00 00
+server_rx frame len=29
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 03 00 00 0a dc 31 32 39
+client_rx frame  len=29
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 03 00 00 0a dc 31 32 39
+server_tx frame len=28
+0000: 20 15 e0 4a fe 7f 00 00 20 1e e0 4a fe 7f 00 00
+0010: ab bf 00 00 5f 73 72 76 30 00 00 00
+server_rx frame len=28
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 02 00 00 0a 56 0d 0a
+client_rx frame  len=28
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 02 00 00 0a 56 0d 0a
+server_tx frame len=28
+0000: 20 15 e0 4a fe 7f 00 00 20 1e e0 4a fe 7f 00 00
+0010: ab bf 00 00 5f 73 72 76 30 00 00 00
+server_rx frame len=28
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 02 00 00 0a 8a 23 20
+client_rx frame  len=28
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 02 00 00 0a 8a 23 20
+server_tx frame len=28
+0000: 20 15 e0 4a fe 7f 00 00 20 1e e0 4a fe 7f 00 00
+0010: ab bf 00 00 5f 73 72 76 30 00 00 00
+server_rx frame len=28
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 02 00 00 0a 8a 23 20
+client_rx frame  len=28
+0000: 36 c0 6f 1e 5e 7a 52 1c d2 f0 ab bf 88 b5 dd cc
+0010: bb aa 00 00 00 02 00 00 0a 8a 23 20

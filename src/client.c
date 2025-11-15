@@ -32,7 +32,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#define RESPONSE_TIMEOUT_NS (500ULL * NSEC_PER_MSEC)
+#define RESPONSE_TIMEOUT_NS (1000ULL * NSEC_PER_MSEC)
 
 typedef struct {
     const char *iface;
@@ -127,7 +127,7 @@ static int init_client_sock(client_ctx_t *ctx, const char *iface) {
     assert(ctx);
     assert(iface);
 
-    if (init_packet_socket(&ctx->sockfd, &ctx->ifr, &ctx->bind_addr, iface, 1) != 0) {
+    if (init_packet_socket(&ctx->sockfd, &ctx->ifr, &ctx->bind_addr, iface, 0) != 0) {
         return -1;
     }
 
@@ -191,6 +191,8 @@ static int client_recv_packet(client_ctx_t *ctx, pack_t *pack, int *payload_len)
     if (peer.sll_ifindex != ctx->bind_addr.sll_ifindex)
         return 0;
 
+    debug_dump_frame("client_rx frame ", (const u8 *)pack, got);
+
     int psz = parse_packet(pack, got, SERVER_SIGNATURE);
     if (psz <= 0)
         return 0;
@@ -239,7 +241,7 @@ static int client_prepare_packet(client_ctx_t *ctx, pack_t *packet, const void *
 static int client_flush_packet(client_ctx_t *ctx, const pack_t *packet, size_t frame_len) {
     assert(ctx);
     assert(packet);
-    debug_dump_frame("debug: client tx frame", (const u8 *)packet, frame_len);
+    debug_dump_frame("client_tx frame ", (const u8 *)packet, frame_len);
     if (sendto(ctx->sockfd, packet, frame_len, 0, (struct sockaddr *)&ctx->saddr, sizeof(ctx->saddr)) < 0) {
         log_error_errno("client_send", "sendto");
         return -1;
@@ -253,6 +255,16 @@ static int client_send_payload(client_ctx_t *ctx, const void *payload, size_t pa
     int frame_len = client_prepare_packet(ctx, &packet, payload, payload_len);
     if (frame_len < 0) return -1;
     return client_flush_packet(ctx, &packet, (size_t)frame_len);
+}
+
+static int client_send_nonce_confirm(client_ctx_t *ctx, u64 nonce) {
+    char buf[64];
+    int len = snprintf(buf, sizeof(buf), "nonce_confirm=%016llx\n", (unsigned long long)nonce);
+    if (len <= 0 || len >= (int)sizeof(buf)) {
+        log_error("client_nonce", "event=format_failed");
+        return -1;
+    }
+    return client_send_payload(ctx, buf, (size_t)len);
 }
 
 static int client_send_hello(client_ctx_t *ctx, const client_args_t *args, u64 *nonce_out) {
@@ -346,8 +358,11 @@ static int client_handshake(client_ctx_t *ctx, const client_args_t *args) {
         if (client_send_hello(ctx, args, &nonce) != 0)
             return -1;
         int ready = client_wait_ready(ctx, nonce, RESPONSE_TIMEOUT_NS);
-        if (ready == 0)
+        if (ready == 0) {
+            if (client_send_nonce_confirm(ctx, nonce) != 0)
+                return -1;
             return 0;
+        }
         if (ready == 2) {
             log_info("client_handshake", "event=kernel_ack nonce=%016llx", (unsigned long long)nonce);
             attempt++;
@@ -453,7 +468,7 @@ static int client_loop(client_ctx_t *ctx) {
 
 /* cli parser using cli_helper.h style */
 static int parse_client_args(int argc, char **argv, client_args_t *args) {
-    if (!args || !argv) return EINVAL;
+    if (!args || !argv) return 1;
     memset(args, 0, sizeof(*args));
 
     const char *argv0 = argv[0];
@@ -490,21 +505,20 @@ static int parse_client_args(int argc, char **argv, client_args_t *args) {
             continue;
         }
         log_error("client_args", "event=unexpected_arg value=%s", *argv);
-        return -1;
+        return 1;
     }
 
     if (!args->iface || !args->mac_str) {
         usage(argv0);
-        return -1;
+        return 1;
     }
     return 0;
 }
 
-int main(int argc, char **argv) {
+int client_main(int argc, char **argv) {
     client_args_t a;
     int pr = parse_client_args(argc, argv, &a);
-    if (pr != 0)
-        return pr > 0 ? 0 : 1;
+    if (pr != 0) return pr > 0 ? 0 : 1;
 
     client_ctx_t ctx;
     if (client_ctx_init(&ctx, &a) != 0)
@@ -518,18 +532,19 @@ int main(int argc, char **argv) {
     if (a.cmd) {
         u8 buf[MAX_PAYLOAD_SIZE];
         size_t len = strlen(a.cmd);
-        if (len + 1 > sizeof(buf)) {
+        if (len + 2 > sizeof(buf)) {
             log_error("client_cmd", "event=command_too_long len=%zu", len);
             client_ctx_deinit(&ctx);
             return 1;
         }
         memcpy(buf, a.cmd, len);
-        buf[len] = '\r'; /* many servers expect cr */
+        buf[len] = '\r';
+        buf[len + 1] = '\n';
         if (ctx.local_echo) {
             (void)write(STDOUT_FILENO, buf, len);
             (void)write(STDOUT_FILENO, "\n", 1);
         }
-        if (client_send_payload(&ctx, buf, len + 1) != 0) {
+        if (client_send_payload(&ctx, buf, len + 2) != 0) {
             client_ctx_deinit(&ctx);
             return 1;
         }

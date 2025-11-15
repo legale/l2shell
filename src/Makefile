@@ -1,65 +1,66 @@
-# Компиляция server.c в a и client.c в b
-BIN_A = a
-BIN_B = b
+# single binary for both client and server
+BIN_MAIN := l2shell
+BIN_A := a
+BIN_B := b
 
-SRC_A = server.c
-SRC_B = client.c
-SRC_COMMON = common.c
-TEST_SCRIPT = ./scripts/test_local.sh
+SRC_MAIN := l2shell_main.c
+SRC_SERVER := server.c
+SRC_CLIENT := client.c
+SRC_COMMON := common.c
 
-CC     = gcc
-FLAGS  += -pipe -Wall -Wextra -Wno-unused-parameter -Wno-unused-const-variable -ggdb3
-DEFINE += -DLINUX -D_GNU_SOURCE -D__USE_MISC
-INCLUDE = -I. -Itests
-OBJ_COMMON = $(SRC_COMMON:.c=.o)
-OBJ_A   = $(SRC_A:.c=.o) $(OBJ_COMMON)
-OBJ_B   = $(SRC_B:.c=.o) $(OBJ_COMMON)
-CPPFLAGS += $(DEFINE) $(INCLUDE)
-CFLAGS  += $(FLAGS)
+CPPFLAGS += -DLINUX -D_GNU_SOURCE -D__USE_MISC -I. -Itests
+CFLAGS += -pipe -Wall -Wextra -Wno-unused-parameter -Wno-unused-const-variable -ggdb3
 LDFLAGS += -L/usr/local/lib
-LDLIBS  = -lc
+LDLIBS := -lc
+
+OBJ_COMMON := $(SRC_COMMON:.c=.o)
+OBJ_SERVER := $(SRC_SERVER:.c=.o)
+OBJ_CLIENT := $(SRC_CLIENT:.c=.o)
+OBJ_MAIN := $(SRC_MAIN:.c=.o)
+OBJ_ALL := $(OBJ_MAIN) $(OBJ_SERVER) $(OBJ_CLIENT) $(OBJ_COMMON)
 
 TEST_DIR := tests
 COMMON_TEST_BIN := $(TEST_DIR)/common_tests
 TEST_BINARIES := $(COMMON_TEST_BIN)
 TEST_LDLIBS := -ldl
 
-# kmod
+# kernel module
 KDIR ?= /lib/modules/$(shell uname -r)/build
-PWD  := $(shell pwd)
+PWD := $(shell pwd)
 obj-m += l2shell_kmod.o
-KMOD  := l2shell_kmod.ko
+KMOD := l2shell_kmod.ko
 
-all: $(BIN_A) $(BIN_B) static $(TEST_BINARIES)
-#	scp -P 443 a_static sysadmin@93.180.6.180:/tmp/a
-#	scp -P 443 b_static sysadmin@93.180.6.181:/tmp/b
+all: $(BIN_MAIN) $(BIN_A) $(BIN_B) static $(TEST_BINARIES)
 
-$(BIN_A): $(OBJ_A)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(OBJ_A) $(LDLIBS) -o $(BIN_A)
+$(BIN_MAIN): $(OBJ_ALL)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(OBJ_ALL) $(LDLIBS) -o $(BIN_MAIN)
 
-$(BIN_B): $(OBJ_B)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(OBJ_B) $(LDLIBS) -o $(BIN_B)
+$(BIN_A): | $(BIN_MAIN)
+	ln -sf $(BIN_MAIN) $(BIN_A)
 
-static: $(BIN_A)_static $(BIN_B)_static
+$(BIN_B): | $(BIN_MAIN)
+	ln -sf $(BIN_MAIN) $(BIN_B)
 
-$(BIN_A)_static: $(OBJ_A)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(OBJ_A) -static -o $@
+static: $(BIN_MAIN)_static
 
-$(BIN_B)_static: $(OBJ_B)
-	$(CC) $(INCLUDE) $(CFLAGS) $(LDFLAGS) $(OBJ_B) -static -o $@
+$(BIN_MAIN)_static: $(OBJ_ALL)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(OBJ_ALL) -static -o $(BIN_MAIN)_static
 
 $(COMMON_TEST_BIN): tests/common_tests.c common.c | tests/test_common_shared.h test_util.h common.h
-	$(CC) $(CPPFLAGS)$(CFLAGS) $^ -o $@ $(TEST_LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ $(TEST_LDLIBS)
 
 clean:
-	-@sudo rm -rf $(OBJ_A) $(OBJ_B) $(BIN_A) $(BIN_B) $(BIN_A)_static $(BIN_B)_static *.o *.so core *.core *~ \
-		$(TEST_BINARIES) logs/* || true
+	-@sudo rm -rf $(OBJ_ALL) $(BIN_MAIN) $(BIN_MAIN)_static $(BIN_A) $(BIN_B) *.o *.so core *.core *~ $(TEST_BINARIES) logs/* || true
 	-@$(MAKE) -C $(KDIR) M=$(PWD) clean || true
 	-@sudo rm -f $(KMOD) || true
 
 .PHONY: test
-test: $(BIN_A) $(BIN_B)
-	sudo $(TEST_SCRIPT)
+# rely on combined binary
+test: $(BIN_MAIN)
+	rm -f $(BIN_A) $(BIN_B)
+	ln -sf $(PWD)/$(BIN_MAIN) $(BIN_A)
+	ln -sf $(PWD)/$(BIN_MAIN) $(BIN_B)
+	sudo ./scripts/test_local.sh
 
 .PHONY: test-unit
 test-unit: $(TEST_BINARIES)

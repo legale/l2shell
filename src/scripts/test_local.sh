@@ -11,7 +11,7 @@ run() {
 }
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 SCRIPT_PATH="${SCRIPT_DIR}/$(basename "$0")"
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -76,13 +76,22 @@ SERVER_MAC="$(cat "/sys/class/net/${SERVER_IF}/address")"
 log server mac="${SERVER_MAC}"
 
 # Run test
-log "Launching server ./a on ${SERVER_IF}"
-./a "${SERVER_IF}" >"${SERVER_LOG}" 2>&1 &
+SERVER_BIN="src/a"
+CLIENT_BIN="src/b"
+if [ ! -x "${SERVER_BIN}" ]; then
+    SERVER_BIN="${REPO_ROOT}/src/l2shell"
+fi
+if [ ! -x "${CLIENT_BIN}" ]; then
+    CLIENT_BIN="${REPO_ROOT}/src/l2shell"
+fi
+
+log "Launching server ${SERVER_BIN} on any"
+"${SERVER_BIN}" any >"${SERVER_LOG}" 2>&1 &
 SERVER_PID=$!
 sleep 1
 
 log "Running client"
-run ./b "${CLIENT_IF}" "${SERVER_MAC}" /bin/sh "echo 123" >"${CLIENT_LOG}" 2>&1
+run "${CLIENT_BIN}" "${CLIENT_IF}" "${SERVER_MAC}" /bin/sh "echo 123" >"${CLIENT_LOG}" 2>&1
 CLIENT_RC=$?
 
 log "Stopping server process"

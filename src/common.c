@@ -80,9 +80,8 @@ int parse_packet(pack_t *packet, ssize_t frame_len, u32 expected_signature) {
     u32 crc_net = h->crc;
     u32 crc_host = ntohl(crc_net);
 
-    if (payload_size > 0) {
+    if (payload_size > 0)
         enc_dec(packet->payload, packet->payload, (const u8 *)&crc_net, payload_size);
-    }
 
     h->crc = 0;
     u32 crc_calc = csum32((const u8 *)packet, expected_len);
@@ -93,9 +92,8 @@ int parse_packet(pack_t *packet, ssize_t frame_len, u32 expected_signature) {
         return -1;
     }
 
-    if (payload_size > 0) {
+    if (payload_size > 0)
         enc_dec(packet->payload, packet->payload, zero_key, payload_size);
-    }
 
     return (int)payload_size;
 }
@@ -152,7 +150,6 @@ void debug_dump_frame(const char *prefix, const u8 *data, size_t len) {
 
     const char *path = "logs/clientserver.log";
     int fd = open(path, O_WRONLY | O_CREAT | O_APPEND, 0666);
-    if (fd < 0) return;
 
     if (fd < 0) {
         log_error_errno("debug_dump", "open='%s'", path);
@@ -217,7 +214,7 @@ void log_error(const char *tag, const char *fmt, ...) {
 }
 
 int init_packet_socket(int *sockfd, struct ifreq *ifr, struct sockaddr_ll *bind_addr, const char *iface, int bind_to_device) {
-    if (!sockfd || !ifr || !bind_addr || !iface) return -1;
+    if (!sockfd || !ifr || !bind_addr) return -1;
 
     *sockfd = socket(AF_PACKET, SOCK_RAW, htons(ETHER_TYPE_CUSTOM));
     if (*sockfd < 0) {
@@ -244,29 +241,34 @@ int init_packet_socket(int *sockfd, struct ifreq *ifr, struct sockaddr_ll *bind_
         return -1;
     }
 
-    if (bind_to_device) {
-        if (setsockopt(*sockfd, SOL_SOCKET, SO_BINDTODEVICE, iface, strnlen(iface, IFNAMSIZ)) < 0) {
-            log_error_errno("packet_socket", "bindtodevice");
+    int ifindex = 0;
+    if (iface && *iface) {
+        if (bind_to_device) {
+            if (setsockopt(*sockfd, SOL_SOCKET, SO_BINDTODEVICE, iface, strnlen(iface, IFNAMSIZ)) < 0) {
+                log_error_errno("packet_socket", "bindtodevice");
+                deinit_packet_socket(sockfd);
+                return -1;
+            }
+        }
+
+        ifindex = if_nametoindex(iface);
+        if (!ifindex) {
+            log_error_errno("packet_socket", "if_nametoindex");
             deinit_packet_socket(sockfd);
             return -1;
         }
-    }
 
-    int ifindex = if_nametoindex(iface);
-    if (!ifindex) {
-        log_error_errno("packet_socket", "if_nametoindex");
-        deinit_packet_socket(sockfd);
-        return -1;
-    }
+        memset(ifr, 0, sizeof(*ifr));
+        strncpy(ifr->ifr_name, iface, IFNAMSIZ - 1);
+        ifr->ifr_name[IFNAMSIZ - 1] = '\0';
 
-    memset(ifr, 0, sizeof(*ifr));
-    strncpy(ifr->ifr_name, iface, IFNAMSIZ - 1);
-    ifr->ifr_name[IFNAMSIZ - 1] = '\0';
-
-    if (ioctl(*sockfd, SIOCGIFHWADDR, ifr) < 0) {
-        log_error_errno("packet_socket", "SIOCGIFHWADDR");
-        deinit_packet_socket(sockfd);
-        return -1;
+        if (ioctl(*sockfd, SIOCGIFHWADDR, ifr) < 0) {
+            log_error_errno("packet_socket", "SIOCGIFHWADDR");
+            deinit_packet_socket(sockfd);
+            return -1;
+        }
+    } else {
+        memset(ifr, 0, sizeof(*ifr));
     }
 
     memset(bind_addr, 0, sizeof(*bind_addr));

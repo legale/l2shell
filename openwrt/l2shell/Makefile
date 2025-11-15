@@ -60,8 +60,9 @@ endef
 
 define Package/l2shell/install
 	$(INSTALL_DIR) $(1)/usr/bin
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/a $(1)/usr/bin/a
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/b $(1)/usr/bin/b
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/l2shell $(1)/usr/bin/l2shell
+	$(LN) l2shell $(1)/usr/bin/a
+	$(LN) l2shell $(1)/usr/bin/b
 endef
 
 
