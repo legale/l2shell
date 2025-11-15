@@ -92,7 +92,7 @@ void enc_dec(const u8 *input, u8 *output, const u8 *key, size_t len);
 int build_packet(pack_t *packet, size_t payload_size, const u8 src_mac[ETH_ALEN], const u8 dst_mac[ETH_ALEN], u32 signature);
 int parse_packet(pack_t *packet, ssize_t frame_len, u32 expected_signature);
 void packet_dedup_init(packet_dedup_t *cache);
-int packet_dedup_should_drop(packet_dedup_t *cache, const u8 mac[ETH_ALEN], u32 crc, u32 payload_size, u32 signature, u64 window_ns);
+int packet_dedup_handler(packet_dedup_t *cache, const u8 mac[ETH_ALEN], u32 crc, u32 payload_size, u32 signature, u64 window_ns);
 
 void debug_dump_frame(const char *prefix, const u8 *data, size_t len);
 int init_packet_socket(int *sockfd, struct ifreq *ifr, struct sockaddr_ll *bind_addr, const char *iface, int bind_to_device);

@@ -79,9 +79,9 @@ static size_t store_spawn_cmd(const u8 *payload, size_t len, const hello_view_t 
     if (!payload || !len)
         return 0;
 
-    if (hello && hello->have_spawn && hello->spawn_len > 0 && hello->spawn_len < sizeof(g.cmd_buf)) {
-        cmd = hello->spawn_cmd;
-        copy_len = hello->spawn_len;
+    if (hello && hello->server_started && hello->server_bin_path_len > 0 && hello->server_bin_path_len < sizeof(g.cmd_buf)) {
+        cmd = hello->server_bin_path;
+        copy_len = hello->server_bin_path_len;
     } else if (copy_len >= sizeof(g.cmd_buf)) {
         copy_len = sizeof(g.cmd_buf) - 1;
     }

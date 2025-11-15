@@ -18,13 +18,13 @@
 #define HELLO_T_NONCE 0x03
 
 typedef struct hello_view {
-    const u8 *spawn_cmd;
-    size_t spawn_len;
-    const u8 *shell_cmd;
-    size_t shell_len;
+    const u8 *server_bin_path;
+    size_t server_bin_path_len;
+    const u8 *cmd;
+    size_t cmd_len;
     u64 nonce;
-    int have_spawn;
-    int have_shell;
+    int server_started;
+    int shell_started;
     int have_nonce;
 } hello_view_t;
 
@@ -109,14 +109,14 @@ static inline int hello_parse(const u8 *buf, size_t buf_len, hello_view_t *view)
             return -1;
         switch (type) {
         case HELLO_T_SPAWN:
-            view->spawn_cmd = buf + offset;
-            view->spawn_len = tlv_len;
-            view->have_spawn = 1;
+            view->server_bin_path = buf + offset;
+            view->server_bin_path_len = tlv_len;
+            view->server_started = 1;
             break;
         case HELLO_T_SHELL:
-            view->shell_cmd = buf + offset;
-            view->shell_len = tlv_len;
-            view->have_shell = 1;
+            view->cmd = buf + offset;
+            view->cmd_len = tlv_len;
+            view->shell_started = 1;
             break;
         case HELLO_T_NONCE:
             if (tlv_len != sizeof(u64))

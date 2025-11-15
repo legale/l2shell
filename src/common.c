@@ -107,7 +107,7 @@ static inline u64 timespec_to_ns(const struct timespec *ts) {
     return (u64)ts->tv_sec * NSEC_PER_SEC + (u64)ts->tv_nsec;
 }
 
-int packet_dedup_should_drop(packet_dedup_t *cache, const u8 mac[ETH_ALEN],
+int packet_dedup_handler(packet_dedup_t *cache, const u8 mac[ETH_ALEN],
                              u32 crc, u32 payload_size, u32 signature,
                              u64 window_ns) {
     if (!cache || !mac) return 0;

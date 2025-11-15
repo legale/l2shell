@@ -26,12 +26,12 @@ static void test_hello_build_and_parse(void) {
 
     hello_view_t view;
     TEST_ASSERT(hello_parse(payload, (size_t)len, &view) == 0);
-    TEST_ASSERT(view.have_spawn);
-    TEST_ASSERT(view.spawn_len == strlen(spawn));
-    TEST_ASSERT_MEMEQ(view.spawn_cmd, spawn, view.spawn_len);
-    TEST_ASSERT(view.have_shell);
-    TEST_ASSERT(view.shell_len == strlen(shell));
-    TEST_ASSERT_MEMEQ(view.shell_cmd, shell, view.shell_len);
+    TEST_ASSERT(view.server_started);
+    TEST_ASSERT(view.server_bin_path_len == strlen(spawn));
+    TEST_ASSERT_MEMEQ(view.server_bin_path, spawn, view.server_bin_path_len);
+    TEST_ASSERT(view.shell_started);
+    TEST_ASSERT(view.cmd_len == strlen(shell));
+    TEST_ASSERT_MEMEQ(view.cmd, shell, view.cmd_len);
     TEST_ASSERT(view.have_nonce);
     TEST_ASSERT(view.nonce == builder.nonce);
     PRINT_TEST_PASSED();
@@ -145,8 +145,8 @@ static void test_packet_dedup_cache(void) {
     u8 mac[ETH_ALEN] = {0x02, 0xff, 0xee, 0xdd, 0xcc, 0xbb};
     packet_dedup_init(&cache);
 
-    TEST_ASSERT(packet_dedup_should_drop(&cache, mac, 0xdeadbeef, 10, CLIENT_SIGNATURE, PACKET_DEDUP_WINDOW_NS) == 0);
-    TEST_ASSERT(packet_dedup_should_drop(&cache, mac, 0xdeadbeef, 10, CLIENT_SIGNATURE, PACKET_DEDUP_WINDOW_NS) == 1);
+    TEST_ASSERT(packet_dedup_handler(&cache, mac, 0xdeadbeef, 10, CLIENT_SIGNATURE, PACKET_DEDUP_WINDOW_NS) == 0);
+    TEST_ASSERT(packet_dedup_handler(&cache, mac, 0xdeadbeef, 10, CLIENT_SIGNATURE, PACKET_DEDUP_WINDOW_NS) == 1);
     PRINT_TEST_PASSED();
 }
 
@@ -211,8 +211,8 @@ static void test_dedup_accepts_different_crc(void) {
     u8 mac[ETH_ALEN] = {0x02, 0xff, 0x00, 0x00, 0x00, 0x04};
     packet_dedup_init(&cache);
 
-    TEST_ASSERT(packet_dedup_should_drop(&cache, mac, 0xaaaaaaaa, 4, CLIENT_SIGNATURE, PACKET_DEDUP_WINDOW_NS) == 0);
-    TEST_ASSERT(packet_dedup_should_drop(&cache, mac, 0xbbbbbbbb, 4, CLIENT_SIGNATURE, PACKET_DEDUP_WINDOW_NS) == 0);
+    TEST_ASSERT(packet_dedup_handler(&cache, mac, 0xaaaaaaaa, 4, CLIENT_SIGNATURE, PACKET_DEDUP_WINDOW_NS) == 0);
+    TEST_ASSERT(packet_dedup_handler(&cache, mac, 0xbbbbbbbb, 4, CLIENT_SIGNATURE, PACKET_DEDUP_WINDOW_NS) == 0);
     PRINT_TEST_PASSED();
 }
 
@@ -303,20 +303,20 @@ static void test_dedup_expired_entry(void) {
     u8 mac[ETH_ALEN] = {0x10, 0x00, 0x00, 0x00, 0x00, 0x01};
     packet_dedup_init(&cache);
 
-    TEST_ASSERT(packet_dedup_should_drop(&cache, mac, 0x1234, 8, CLIENT_SIGNATURE, 1) == 0);
+    TEST_ASSERT(packet_dedup_handler(&cache, mac, 0x1234, 8, CLIENT_SIGNATURE, 1) == 0);
     packet_fingerprint_t *entry = &cache.entries[0];
     entry->ts.tv_sec = 0;
     entry->ts.tv_nsec = 0;
     entry->valid = 1;
-    TEST_ASSERT(packet_dedup_should_drop(&cache, mac, 0x1234, 8, CLIENT_SIGNATURE, 1) == 0);
+    TEST_ASSERT(packet_dedup_handler(&cache, mac, 0x1234, 8, CLIENT_SIGNATURE, 1) == 0);
     PRINT_TEST_PASSED();
 }
 
 static void test_dedup_null_args(void) {
     PRINT_TEST_START("dedup_null_args");
     u8 mac[ETH_ALEN] = {0};
-    TEST_ASSERT(packet_dedup_should_drop(NULL, mac, 0, 0, 0, 0) == 0);
-    TEST_ASSERT(packet_dedup_should_drop(&(packet_dedup_t){0}, NULL, 0, 0, 0, 0) == 0);
+    TEST_ASSERT(packet_dedup_handler(NULL, mac, 0, 0, 0, 0) == 0);
+    TEST_ASSERT(packet_dedup_handler(&(packet_dedup_t){0}, NULL, 0, 0, 0, 0) == 0);
     PRINT_TEST_PASSED();
 }
 

@@ -50,18 +50,18 @@ static size_t server_dup_cursor;
 
 typedef struct server_ctx server_ctx_t;
 
-static void start_command_process(const char *command);
+static void start_shell_proc(const char *command);
 static void terminate_shell_process(void);
-static int launch_remote_command(const u8 *payload, size_t payload_size);
+static int server_exec(const u8 *payload, size_t payload_size);
 static ssize_t write_all(int fd, const void *buf, size_t count);
-static void check_command_termination(void);
+static void check_shell_termination(void);
 static void usage(const char *prog);
 static u64 server_mono_ns(void);
 static void server_format_ifname(int ifindex, char buf[IFNAMSIZ]);
 static u32 server_frame_fingerprint(const pack_t *packet, size_t len);
 static int server_frame_dedup_should_drop(const pack_t *packet, size_t len, const struct sockaddr_ll *peer);
-static int server_handle_nonce_confirm(server_ctx_t *ctx, const u8 *payload, size_t payload_size, const struct sockaddr_ll *peer);
-static int server_handle_hello_only(server_ctx_t *ctx, const u8 *payload, size_t payload_size, const struct sockaddr_ll *peer);
+static int server_nonce_confirm_handler(server_ctx_t *ctx, const u8 *payload, size_t payload_size, const struct sockaddr_ll *peer);
+static int server_hello_handler(server_ctx_t *ctx, const u8 *payload, size_t payload_size, const struct sockaddr_ll *peer);
 
 typedef struct server_args {
     const char *iface;
@@ -109,7 +109,7 @@ static ssize_t write_all(int fd, const void *buf, size_t count) {
     return count;
 }
 
-// Функция для обработки чтения данных от клиента и отправки их в команду
+// Функция для обработки чтения данных от клиента и отправки их процессу сервера
 static ssize_t server_read_raw_frame(server_ctx_t *ctx, pack_t *packet, struct sockaddr_ll *peer) {
     assert(ctx);
     assert(packet);
@@ -122,7 +122,7 @@ static ssize_t server_read_raw_frame(server_ctx_t *ctx, pack_t *packet, struct s
     return ret;
 }
 
-static int server_update_iface(server_ctx_t *ctx, const struct sockaddr_ll *peer) {
+static int server_update_iface_out(server_ctx_t *ctx, const struct sockaddr_ll *peer) {
     if (!ctx || !peer) return -1;
     if (!ctx->any_iface) return 0;
 
@@ -156,8 +156,8 @@ static int server_validate_mac(server_ctx_t *ctx, const packh_t *header) {
     return 0;
 }
 
-static int server_check_duplicate(const packh_t *header, u32 payload_size_host, u32 signature_host) {
-    if (packet_dedup_should_drop(&server_rx_dedup,
+static int server_check_dup(const packh_t *header, u32 payload_size_host, u32 signature_host) {
+    if (packet_dedup_handler(&server_rx_dedup,
                                  (const u8 *)header->eth_hdr.ether_shost,
                                  ntohl(header->crc),
                                  payload_size_host,
@@ -209,28 +209,28 @@ static void server_send_ready_ack(server_ctx_t *ctx, const hello_view_t *hello) 
     }
 }
 
-static int server_handle_nonce_confirm(server_ctx_t *ctx, const u8 *payload, size_t payload_size, const struct sockaddr_ll *peer);
+static int server_nonce_confirm_handler(server_ctx_t *ctx, const u8 *payload, size_t payload_size, const struct sockaddr_ll *peer);
 
-static int server_handle_command_launch(server_ctx_t *ctx, pack_t *packet, int payload_size, const struct sockaddr_ll *peer) {
+static int server_cmd_exec_handler(server_ctx_t *ctx, pack_t *packet, int payload_size, const struct sockaddr_ll *peer) {
     assert(ctx);
     assert(packet);
 
     if (peer) {
         ctx->peer_addr = *peer;
         if (ctx->any_iface)
-            (void)server_update_iface(ctx, peer);
+            (void)server_update_iface_out(ctx, peer);
     }
 
     if (payload_size > 0) {
         hello_view_t hello = {0};
-        if (hello_parse(packet->payload, (size_t)payload_size, &hello) == 0 && hello.have_shell && hello.shell_len > 0) {
+        if (hello_parse(packet->payload, (size_t)payload_size, &hello) == 0 && hello.shell_started && hello.cmd_len > 0) {
             if (hello.have_nonce) {
                 ctx->pending_nonce = hello.nonce;
                 ctx->awaiting_nonce_confirm = 1;
             } else {
                 ctx->awaiting_nonce_confirm = 0;
             }
-            if (launch_remote_command(hello.shell_cmd, hello.shell_len) != 0) {
+            if (server_exec(hello.cmd, hello.cmd_len) != 0) {
                 log_error("server_launch", "event=hello_launch_failed");
             } else {
                 server_send_ready_ack(ctx, &hello);
@@ -246,25 +246,25 @@ static int server_handle_command_launch(server_ctx_t *ctx, pack_t *packet, int p
         cmd = default_cmd;
         cmd_sz = sizeof(default_cmd) - 1;
     }
-    if (launch_remote_command(cmd, cmd_sz) != 0) {
+    if (server_exec(cmd, cmd_sz) != 0) {
         log_error("server_launch", "event=launch_failed");
     }
     return payload_size;
 }
 
-static int server_dispatch_payload(server_ctx_t *ctx, pack_t *packet, int payload_size, const struct sockaddr_ll *peer) {
+static int server_payload_handler(server_ctx_t *ctx, pack_t *packet, int payload_size, const struct sockaddr_ll *peer) {
     assert(ctx);
     assert(packet);
-    if (server_handle_nonce_confirm(ctx, packet->payload, (size_t)payload_size, peer))
+    if (server_nonce_confirm_handler(ctx, packet->payload, (size_t)payload_size, peer))
         return payload_size;
-    if (sh_fd != -1 && server_handle_hello_only(ctx, packet->payload, (size_t)payload_size, peer))
+    if (sh_fd != -1 && server_hello_handler(ctx, packet->payload, (size_t)payload_size, peer))
         return payload_size;
-    if (sh_fd == -1) return server_handle_command_launch(ctx, packet, payload_size, peer);
+    if (sh_fd == -1) return server_cmd_exec_handler(ctx, packet, payload_size, peer);
     (void)write_all(sh_fd, packet->payload, (size_t)payload_size);
     return payload_size;
 }
 
-static ssize_t server_handle_socket_event(server_ctx_t *ctx, pack_t *packet) {
+static ssize_t server_socket_event_handler(server_ctx_t *ctx, pack_t *packet) {
     struct sockaddr_ll peer = {0};
     ssize_t ret = server_read_raw_frame(ctx, packet, &peer);
     if (ret <= 0) return ret;
@@ -295,7 +295,7 @@ static ssize_t server_handle_socket_event(server_ctx_t *ctx, pack_t *packet) {
              crc,
              peer_ifname);
 
-    if (server_check_duplicate(header, payload_size_host, signature_host) != 0) {
+    if (server_check_dup(header, payload_size_host, signature_host) != 0) {
         return -1;
     }
 
@@ -304,10 +304,10 @@ static ssize_t server_handle_socket_event(server_ctx_t *ctx, pack_t *packet) {
         return payload_size;
     }
 
-    return server_dispatch_payload(ctx, packet, payload_size, &peer);
+    return server_payload_handler(ctx, packet, payload_size, &peer);
 }
 
-static int launch_remote_command(const u8 *payload, size_t payload_size) {
+static int server_exec(const u8 *payload, size_t payload_size) {
     if (payload_size == 0) {
         log_error("server_launch", "event=empty_payload");
         return -1;
@@ -324,7 +324,7 @@ static int launch_remote_command(const u8 *payload, size_t payload_size) {
         log_error("server_launch", "event=payload_null");
         return -1;
     }
-    start_command_process(command_buf);
+    start_shell_proc(command_buf);
     return 0;
 }
 
@@ -364,7 +364,7 @@ static void server_handle_shell_event(server_ctx_t *ctx, pack_t *packet) {
     }
 }
 
-static void start_command_process(const char *command) {
+static void start_shell_proc(const char *command) {
     if (!command) {
         log_error("server_shell", "cmd=NULL");
         return;
@@ -380,7 +380,7 @@ static void start_command_process(const char *command) {
 
     // child process
     if (child == 0) {
-        log_info("exec", "execlp cmd='%s'", command);
+        log_info("server_shell", "execlp cmd='%s'", command);
         execlp(command, command, NULL);
         log_error_errno("server_shell", "execlp='%s'", command);
         _exit(1);
@@ -388,17 +388,17 @@ static void start_command_process(const char *command) {
 
     // parent process
     pid = child;
-    log_info("server_shell started", "pid=%d cmd='%s'", (int)pid, command);
+    log_info("server_shell", "started pid=%d cmd='%s'", (int)pid, command);
 }
 
 // Проверяет, завершился ли процесс команды, и очищает ресурсы
-static void check_command_termination(void) {
+static void check_shell_termination(void) {
     sig_atomic_t current_pid = pid; // Атомарное чтение
     if (current_pid != -1) {
         int status;
         pid_t result = waitpid(current_pid, &status, WNOHANG);
         if (result == current_pid) {
-            log_info("server_shell terminated", "pid=%d", current_pid);
+            log_info("server_shell", "terminated pid=%d", current_pid);
             if (sh_fd != -1) {
                 close(sh_fd);
                 sh_fd = -1;
@@ -514,13 +514,13 @@ static int server_loop(server_ctx_t *ctx) {
             return -1;
         }
 
-        check_command_termination();
+        check_shell_termination();
 
         int had_activity = 0;
 
         if (ready > 0) {
             if (FD_ISSET(ctx->sockfd, &fds)) {
-                if (server_handle_socket_event(ctx, &rx_packet) >= 0) {
+                if (server_socket_event_handler(ctx, &rx_packet) >= 0) {
                     had_activity = 1;
                 }
             }
@@ -635,7 +635,7 @@ static int server_frame_dedup_should_drop(const pack_t *packet, size_t len, cons
     return 0;
 }
 
-static int server_handle_nonce_confirm(server_ctx_t *ctx, const u8 *payload, size_t payload_size, const struct sockaddr_ll *peer) {
+static int server_nonce_confirm_handler(server_ctx_t *ctx, const u8 *payload, size_t payload_size, const struct sockaddr_ll *peer) {
     if (!ctx || !payload || payload_size == 0 || !ctx->awaiting_nonce_confirm)
         return 0;
 
@@ -654,7 +654,7 @@ static int server_handle_nonce_confirm(server_ctx_t *ctx, const u8 *payload, siz
     if (peer) {
         ctx->peer_addr = *peer;
         if (ctx->any_iface)
-            (void)server_update_iface(ctx, peer);
+            (void)server_update_iface_out(ctx, peer);
     }
     char ifname[IFNAMSIZ];
     server_format_ifname(peer ? peer->sll_ifindex : ctx->bind_addr.sll_ifindex, ifname);
@@ -663,18 +663,18 @@ static int server_handle_nonce_confirm(server_ctx_t *ctx, const u8 *payload, siz
     return 1;
 }
 
-static int server_handle_hello_only(server_ctx_t *ctx, const u8 *payload, size_t payload_size, const struct sockaddr_ll *peer) {
+static int server_hello_handler(server_ctx_t *ctx, const u8 *payload, size_t payload_size, const struct sockaddr_ll *peer) {
     if (!ctx || !payload || payload_size == 0)
         return 0;
 
     hello_view_t hello = {0};
-    if (hello_parse(payload, payload_size, &hello) != 0 || !hello.have_shell)
+    if (hello_parse(payload, payload_size, &hello) != 0 || !hello.shell_started)
         return 0;
 
     if (peer) {
         ctx->peer_addr = *peer;
         if (ctx->any_iface)
-            (void)server_update_iface(ctx, peer);
+            (void)server_update_iface_out(ctx, peer);
     }
 
     if (hello.have_nonce) {
