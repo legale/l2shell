@@ -6,3 +6,5 @@
 logs/
 src/l2shell_embedded.h
 src/bin2c
+src/l2shell_dbg
+src/build/
