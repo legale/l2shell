@@ -1,6 +1,0 @@
-[test_local] src/b veth_cli0 52:1c:d2:f0:ab:bf /bin/sh echo 123
-echo 123
-
-level=info tag=exec execlp cmd='/bin/sh'
-# 123
-# # 
