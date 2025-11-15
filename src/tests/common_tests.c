@@ -19,6 +19,7 @@ static void test_hello_build_and_parse(void) {
         .spawn_cmd = spawn,
         .shell_cmd = shell,
         .nonce = 0x1122334455667788ULL,
+        .include_spawn = 1,
         .include_nonce = 1,
     };
 
@@ -33,6 +34,30 @@ static void test_hello_build_and_parse(void) {
     TEST_ASSERT(view.shell_started);
     TEST_ASSERT(view.cmd_len == strlen(shell));
     TEST_ASSERT_MEMEQ(view.cmd, shell, view.cmd_len);
+    TEST_ASSERT(view.have_nonce);
+    TEST_ASSERT(view.nonce == builder.nonce);
+    PRINT_TEST_PASSED();
+}
+
+static void test_hello_build_without_spawn(void) {
+    PRINT_TEST_START("hello_build_without_spawn");
+    u8 payload[MAX_PAYLOAD_SIZE] = {0};
+    const char *shell = "sh";
+    hello_builder_t builder = {
+        .spawn_cmd = NULL,
+        .shell_cmd = shell,
+        .nonce = 0xA5,
+        .include_spawn = 0,
+        .include_nonce = 1,
+    };
+    int len = hello_build(payload, sizeof(payload), &builder);
+    TEST_ASSERT(len > 0);
+
+    hello_view_t view;
+    TEST_ASSERT(hello_parse(payload, (size_t)len, &view) == 0);
+    TEST_ASSERT(!view.server_started);
+    TEST_ASSERT(view.shell_started);
+    TEST_ASSERT(view.cmd_len == strlen(shell));
     TEST_ASSERT(view.have_nonce);
     TEST_ASSERT(view.nonce == builder.nonce);
     PRINT_TEST_PASSED();
@@ -356,6 +381,7 @@ static void test_debug_dump_frame_logs_prefix(void) {
 int main(int argc, char **argv) {
     const struct test_entry tests[] = {
         {"hello_build_and_parse", test_hello_build_and_parse},
+        {"hello_build_without_spawn", test_hello_build_without_spawn},
         {"hello_parse_rejects_bad_version", test_hello_parse_rejects_bad_version},
         {"hello_parse_rejects_truncated_tlv", test_hello_parse_rejects_truncated_tlv},
         {"enc_dec_roundtrip", test_enc_dec_roundtrip},

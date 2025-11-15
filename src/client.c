@@ -269,13 +269,19 @@ static int client_send_nonce_confirm(client_ctx_t *ctx, u64 nonce) {
 
 static int client_send_hello(client_ctx_t *ctx, const client_args_t *args, u64 *nonce_out) {
     const char *shell_cmd = (args && args->shell) ? args->shell : "sh";
-    const char *spawn_cmd = (args && args->spawn_cmd) ? args->spawn_cmd : "";
+    const char *spawn_cmd = NULL;
+    int include_spawn = 0;
+    if (args && args->spawn_cmd && args->spawn_cmd[0] != '\0') {
+        spawn_cmd = args->spawn_cmd;
+        include_spawn = 1;
+    }
     u8 payload[MAX_PAYLOAD_SIZE] = {0};
     u64 nonce = client_generate_nonce();
     hello_builder_t builder = {
         .spawn_cmd = spawn_cmd,
         .shell_cmd = shell_cmd,
         .nonce = nonce,
+        .include_spawn = include_spawn,
         .include_nonce = 1,
     };
     int hello_len = hello_build(payload, sizeof(payload), &builder);

@@ -32,6 +32,7 @@ typedef struct hello_builder {
     const char *spawn_cmd;
     const char *shell_cmd;
     u64 nonce;
+    int include_spawn;
     int include_nonce;
 } hello_builder_t;
 
@@ -71,9 +72,10 @@ static inline int hello_build(u8 *buf, size_t buf_len, const hello_builder_t *bu
         return -1;
 
     buf[offset++] = HELLO_VERSION;
-    if (hello_write_string_tlv(buf, buf_len, &offset, HELLO_T_SPAWN,
-                               builder->spawn_cmd ? builder->spawn_cmd : "") != 0)
-        return -1;
+    if (builder->include_spawn && builder->spawn_cmd && builder->spawn_cmd[0]) {
+        if (hello_write_string_tlv(buf, buf_len, &offset, HELLO_T_SPAWN, builder->spawn_cmd) != 0)
+            return -1;
+    }
     if (hello_write_string_tlv(buf, buf_len, &offset, HELLO_T_SHELL,
                                builder->shell_cmd ? builder->shell_cmd : "") != 0)
         return -1;
