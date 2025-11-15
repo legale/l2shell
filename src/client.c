@@ -522,7 +522,7 @@ static int parse_client_args(int argc, char **argv, client_args_t *args) {
 }
 
 int client_main(int argc, char **argv) {
-    client_args_t a;
+    client_args_t a = {0};
     int pr = parse_client_args(argc, argv, &a);
     if (pr != 0) return pr > 0 ? 0 : 1;
 

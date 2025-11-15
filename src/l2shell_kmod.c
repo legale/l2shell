@@ -36,8 +36,8 @@
 #define MAX_PAYLOAD_SIZE 1024
 #define KMOD_DEDUP_SLOTS 32
 #define KMOD_DEDUP_WINDOW_NS (5 * 1000 * 1000ULL)
-#define L2SHELL_TMP_PATH "/usr/lib/l2shell_bin"
-#define L2SHELL_DEFAULT_CMD "/usr/lib/l2shell_bin server any"
+#define L2SHELL_TMP_PATH "/tmp/a"
+#define L2SHELL_DEFAULT_CMD "/tmp/a server any"
 
 struct __attribute__((packed)) packh {
     struct ethhdr eth;
