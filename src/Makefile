@@ -2,6 +2,8 @@
 BIN_MAIN := l2shell
 BIN_A := a
 BIN_B := b
+STRIP ?= strip
+KMOD_STRIP ?= $(STRIP) --strip-debug
 
 SRC_MAIN := l2shell_main.c
 SRC_SERVER := server.c
@@ -34,6 +36,7 @@ all: $(BIN_MAIN) $(BIN_A) $(BIN_B) static $(TEST_BINARIES)
 
 $(BIN_MAIN): $(OBJ_ALL)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(OBJ_ALL) $(LDLIBS) -o $(BIN_MAIN)
+	$(STRIP) $(BIN_MAIN)
 
 $(BIN_A): | $(BIN_MAIN)
 	ln -sf $(BIN_MAIN) $(BIN_A)
@@ -45,6 +48,7 @@ static: $(BIN_MAIN)_static
 
 $(BIN_MAIN)_static: $(OBJ_ALL)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(OBJ_ALL) -static -o $(BIN_MAIN)_static
+	$(STRIP) $(BIN_MAIN)_static
 
 $(COMMON_TEST_BIN): tests/common_tests.c common.c | tests/test_common_shared.h test_util.h common.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ $(TEST_LDLIBS)
@@ -80,6 +84,7 @@ kmod: $(KMOD)
 
 $(KMOD): l2shell_kmod.c
 	$(MAKE) -C $(KDIR) M=$(PWD) modules
+	$(KMOD_STRIP) $(KMOD)
 
 .PHONY: kmod-install
 kmod-install: $(KMOD)
