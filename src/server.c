@@ -13,6 +13,7 @@
 
 #include <arpa/inet.h>
 #include <assert.h>
+#include <ctype.h> // isspace
 #include <errno.h> //EINTR MACRO
 #include <fcntl.h> // Для функции fcntl
 #include <net/if.h>
@@ -238,14 +239,14 @@ static int server_handle_command_launch(server_ctx_t *ctx, pack_t *packet, int p
         }
     }
 
-    const u8 *cmd_payload = packet->payload;
-    size_t cmd_size = (size_t)payload_size;
-    if (cmd_size == 0 || (cmd_size == 1 && packet->payload[0] == '\n')) {
+    const u8 *cmd = packet->payload;
+    size_t cmd_sz = (size_t)payload_size;
+    if (cmd_sz == 0 || (cmd_sz > 0 && isspace(cmd[0]))) {
         static const u8 default_cmd[] = "sh";
-        cmd_payload = default_cmd;
-        cmd_size = sizeof(default_cmd) - 1;
+        cmd = default_cmd;
+        cmd_sz = sizeof(default_cmd) - 1;
     }
-    if (launch_remote_command(cmd_payload, cmd_size) != 0) {
+    if (launch_remote_command(cmd, cmd_sz) != 0) {
         log_error("server_launch", "event=launch_failed");
     }
     return payload_size;
