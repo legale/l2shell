@@ -28,7 +28,7 @@ define KernelPackage/l2shell-kmod
   SECTION:=net
   CATEGORY:=Kernel modules
   TITLE:=l2shell kernel trigger
-  VERSION:=$(LINUX_VERSION)-$(PKG_VERSION)-$(PKG_RELEASE)
+  VERSION:=$(LINUX_VERSION).$(PKG_VERSION)-r$(PKG_RELEASE)
   FILES:=$(PKG_BUILD_DIR)/l2shell_kmod.$(LINUX_KMOD_SUFFIX)
   AUTOLOAD:=$(call AutoLoad,50,l2shell_kmod)
 endef
