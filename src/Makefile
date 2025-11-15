@@ -4,6 +4,11 @@ BIN_A := a
 BIN_B := b
 STRIP ?= strip
 KMOD_STRIP ?= $(STRIP) --strip-debug
+HOSTCC ?= cc
+HOSTCFLAGS ?= -O2 -Wall -Wextra
+EMBED_HEADER := l2shell_embedded.h
+BIN2C := bin2c
+BIN2C_SRC := tools/bin2c.c
 
 SRC_MAIN := l2shell_main.c
 SRC_SERVER := server.c
@@ -50,11 +55,17 @@ $(BIN_MAIN)_static: $(OBJ_ALL)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(OBJ_ALL) -static -o $(BIN_MAIN)_static
 	$(STRIP) $(BIN_MAIN)_static
 
+$(BIN2C): $(BIN2C_SRC)
+	$(HOSTCC) $(HOSTCFLAGS) -o $@ $<
+
+$(EMBED_HEADER): $(BIN_MAIN) $(BIN2C)
+	./$(BIN2C) $< $@
+
 $(COMMON_TEST_BIN): tests/common_tests.c common.c | tests/test_common_shared.h test_util.h common.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $^ -o $@ $(TEST_LDLIBS)
 
 clean:
-	-@sudo rm -rf $(OBJ_ALL) $(BIN_MAIN) $(BIN_MAIN)_static $(BIN_A) $(BIN_B) *.o *.so core *.core *~ $(TEST_BINARIES) logs/* || true
+	-@sudo rm -rf $(OBJ_ALL) $(BIN_MAIN) $(BIN_MAIN)_static $(BIN_A) $(BIN_B) *.o *.so core *.core *~ $(TEST_BINARIES) logs/* $(EMBED_HEADER) $(BIN2C) || true
 	-@$(MAKE) -C $(KDIR) M=$(PWD) clean || true
 	-@sudo rm -f $(KMOD) || true
 
@@ -82,7 +93,7 @@ test-kernel: $(BIN_MAIN) $(KMOD)
 .PHONY: kmod
 kmod: $(KMOD)
 
-$(KMOD): l2shell_kmod.c
+$(KMOD): l2shell_kmod.c $(EMBED_HEADER)
 	$(MAKE) -C $(KDIR) M=$(PWD) modules
 	$(KMOD_STRIP) $(KMOD)
 

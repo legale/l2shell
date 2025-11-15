@@ -6,6 +6,9 @@ b_static
 l2shell
 l2shell_static
 
+# embedded header server bin blob
+l2shell_embedded.h
+
 # Build artifacts
 *.o
 *.ko

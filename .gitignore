@@ -4,3 +4,5 @@
 # logs
 *.log
 logs/
+src/l2shell_embedded.h
+src/bin2c
