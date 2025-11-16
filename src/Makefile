@@ -40,7 +40,7 @@ PWD := $(shell pwd)
 obj-m += l2shell_kmod.o
 KMOD := l2shell_kmod.ko
 
-all: $(BIN_MAIN) $(BIN_DEBUG) $(BIN_A) $(BIN_B) static $(TEST_BINARIES)
+all: $(BIN_MAIN) $(BIN_DEBUG) $(BIN_A) $(BIN_B) static $(TEST_BINARIES) $(EMBED_HEADER)
 
 $(REL_OBJ_DIR)/%.o: %.c
 	@mkdir -p $(dir $@)
