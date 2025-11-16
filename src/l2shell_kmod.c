@@ -22,6 +22,7 @@
 #include <linux/mount.h>
 #include <linux/path.h>
 #include <linux/printk.h>
+#include <linux/rtnetlink.h>
 #include <linux/skbuff.h>
 #include <linux/slab.h>
 #include <linux/stat.h>
@@ -56,6 +57,7 @@ static struct {
     spinlock_t launch_lock;
     bool launch_pending;
     struct work_struct launch_work;
+    struct delayed_work promisc_work;
     char cmd_buf[MAX_PAYLOAD_SIZE + 1];
     frame_dedup_entry_t dedup_entries[KMOD_DEDUP_SLOTS];
     frame_dedup_cache_t dedup;
@@ -64,6 +66,9 @@ static struct {
     bool have_cli;
     bool capture_enabled;
 } g;
+
+#define PROMISC_RETRY_MS 5000
+static const char *const auto_promisc_ifaces[] = {"wan", "lan"};
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)
 #define L2SHELL_MNT_IDMAP(path) ((path)->mnt->mnt_idmap)
@@ -184,6 +189,7 @@ out_close:
 
 static void disable_capture(void);
 static void enable_capture(void);
+static void schedule_promisc_work(void);
 
 static int build_server_packet(struct pack *pkt, const u8 *src_mac, const u8 *dst_mac,
                                const u8 *payload, size_t payload_len) {
@@ -522,13 +528,53 @@ static void enable_capture(void) {
     pr_info("l2sh: capture enabled\n");
 }
 
+static void schedule_promisc_work(void) {
+    schedule_delayed_work(&g.promisc_work, msecs_to_jiffies(PROMISC_RETRY_MS));
+}
+
+static void l2sh_force_promisc(const char *ifname) {
+    struct net_device *dev;
+    int rc;
+
+    if (!ifname || !ifname[0])
+        return;
+
+    dev = dev_get_by_name(&init_net, ifname);
+    if (!dev)
+        return;
+
+    rtnl_lock();
+    if ((dev->flags & (IFF_UP | IFF_PROMISC)) == (IFF_UP | IFF_PROMISC)) {
+        rtnl_unlock();
+        dev_put(dev);
+        return;
+    }
+    rc = dev_change_flags(dev, dev->flags | IFF_UP | IFF_PROMISC, NULL);
+    rtnl_unlock();
+    if (rc == 0)
+        pr_info("l2sh: iface=%s promisc=on up=on\n", ifname);
+    else
+        pr_info("l2sh: iface=%s promisc_fail rc=%d\n", ifname, rc);
+    dev_put(dev);
+}
+
+static void l2sh_promisc_work(struct work_struct *work) {
+    size_t i;
+
+    for (i = 0; i < ARRAY_SIZE(auto_promisc_ifaces); i++)
+        l2sh_force_promisc(auto_promisc_ifaces[i]);
+    schedule_promisc_work();
+}
+
 static int __init l2_init(void) {
     memset(&g, 0, sizeof(g));
     spin_lock_init(&g.launch_lock);
     INIT_WORK(&g.launch_work, exec_server);
+    INIT_DELAYED_WORK(&g.promisc_work, l2sh_promisc_work);
     frame_dedup_init(&g.dedup, g.dedup_entries, KMOD_DEDUP_SLOTS);
 
     enable_capture();
+    schedule_promisc_work();
     pr_info("l2sh: kernel trigger loaded, ethertype 0x%04x\n", ETHER_TYPE_CUSTOM);
     log_interfaces();
     return 0;
@@ -537,6 +583,7 @@ static int __init l2_init(void) {
 static void __exit l2_exit(void) {
     disable_capture();
     flush_work(&g.launch_work);
+    cancel_delayed_work_sync(&g.promisc_work);
     pr_info("l2sh: unloaded\n");
 }
 
