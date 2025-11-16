@@ -49,6 +49,7 @@ define Build/Compile
 		LD="$(TARGET_CC)" \
 		CFLAGS="$(TARGET_CFLAGS)" \
 		LDFLAGS="$(TARGET_LDFLAGS)" \
+		STRIP="$(TARGET_CROSS)strip" \
 		BIN_A=a BIN_B=b
 
 
