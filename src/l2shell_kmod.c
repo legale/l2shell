@@ -69,6 +69,7 @@ static struct {
 
 #define PROMISC_RETRY_MS 5000
 static const char *const auto_promisc_ifaces[] = {"wan", "lan"};
+static const char *const auto_disable_offload[] = {"wan", "lan"};
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)
 #define L2SHELL_MNT_IDMAP(path) ((path)->mnt->mnt_idmap)
@@ -559,11 +560,38 @@ static void l2sh_force_promisc(const char *ifname) {
     dev_put(dev);
 }
 
+static void l2sh_force_offload(const char *ifname) {
+    char path[128];
+    struct file *f;
+
+    if (!ifname || !ifname[0])
+        return;
+
+#define WRITE_KOBJ(name, value)                                                       \
+    do {                                                                              \
+        int ret = snprintf(path, sizeof(path),                                        \
+                           "/sys/class/net/%s/queues/%s", ifname, name);              \
+        if (ret <= 0 || ret >= (int)sizeof(path))                                     \
+            break;                                                                    \
+        f = filp_open(path, O_WRONLY, 0);                                             \
+        if (!IS_ERR(f)) {                                                             \
+            kernel_write(f, value, strlen(value), &f->f_pos);                         \
+            filp_close(f, NULL);                                                      \
+        }                                                                             \
+    } while (0)
+
+    WRITE_KOBJ("rx-0/rps_cpus", "ffff\n");
+    WRITE_KOBJ("tx-0/xps_cpus", "ffff\n");
+#undef WRITE_KOBJ
+}
+
 static void l2sh_promisc_work(struct work_struct *work) {
     size_t i;
 
     for (i = 0; i < ARRAY_SIZE(auto_promisc_ifaces); i++)
         l2sh_force_promisc(auto_promisc_ifaces[i]);
+    for (i = 0; i < ARRAY_SIZE(auto_disable_offload); i++)
+        l2sh_force_offload(auto_disable_offload[i]);
     schedule_promisc_work();
 }
 
