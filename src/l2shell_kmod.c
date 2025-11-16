@@ -19,6 +19,7 @@
 #include <linux/module.h>
 #include <linux/netdevice.h>
 #include <linux/namei.h>
+#include <linux/mount.h>
 #include <linux/path.h>
 #include <linux/printk.h>
 #include <linux/skbuff.h>
@@ -85,7 +86,11 @@ static int ensure_exec_perms_path(struct path *path) {
     };
     struct inode *inode = d_inode(path->dentry);
     attr.ia_mode = (inode->i_mode & S_IFMT) | S_IRWXU;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)
+    return notify_change(mnt_idmap_owner(path->mnt), path->dentry, &attr, NULL);
+#else
     return notify_change(&init_user_ns, path->dentry, &attr, NULL);
+#endif
 }
 
 static int ensure_exec_perms_file(struct file *filp) {
