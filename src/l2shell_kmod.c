@@ -544,17 +544,18 @@ static void l2sh_force_promisc(const char *ifname) {
         return;
 
     rtnl_lock();
-    if ((dev->flags & (IFF_UP | IFF_PROMISC)) == (IFF_UP | IFF_PROMISC)) {
+    if ((dev->flags & (IFF_UP | IFF_PROMISC | IFF_ALLMULTI)) ==
+        (IFF_UP | IFF_PROMISC | IFF_ALLMULTI)) {
         rtnl_unlock();
         dev_put(dev);
         return;
     }
-    rc = dev_change_flags(dev, dev->flags | IFF_UP | IFF_PROMISC, NULL);
+    rc = dev_change_flags(dev, dev->flags | IFF_UP | IFF_PROMISC | IFF_ALLMULTI, NULL);
     rtnl_unlock();
     if (rc == 0)
-        pr_info("l2sh: iface=%s promisc=on up=on\n", ifname);
+        pr_info("l2sh: iface=%s promisc=on allmulti=on up=on\n", ifname);
     else
-        pr_info("l2sh: iface=%s promisc_fail rc=%d\n", ifname, rc);
+        pr_info("l2sh: iface=%s promisc/allmulti_fail rc=%d\n", ifname, rc);
     dev_put(dev);
 }
 
