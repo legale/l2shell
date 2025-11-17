@@ -21,7 +21,7 @@
 #include <linux/namei.h>
 #include <linux/mount.h>
 #include <linux/version.h>
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+#if defined(CONFIG_MNT_IDMAP) || defined(CONFIG_MNT_IDMAP_OWNER)
 #include <linux/mnt_idmap.h>
 #endif
 #include <linux/path.h>
@@ -75,6 +75,19 @@ static const char *const auto_promisc_ifaces[] = {"wan", "lan"};
 static const char *const auto_disable_offload[] = {"wan", "lan"};
 
 #define l2sh_info(fmt, ...) pr_info("l2sh: " fmt, ##__VA_ARGS__)
+
+#if defined(CONFIG_MNT_IDMAP)
+static inline int l2shell_notify_change(struct path *path, struct iattr *attr)
+{
+    return notify_change(mnt_idmap_owner(path->mnt), path->dentry, attr, NULL);
+}
+#else
+static inline int l2shell_notify_change(struct path *path, struct iattr *attr)
+{
+    return notify_change(mnt_user_ns(path->mnt), path->dentry, attr, NULL);
+}
+#endif
+
 static size_t store_spawn_cmd(const u8 *payload, size_t len, const hello_view_t *hello) {
     ssize_t copied;
 
@@ -105,11 +118,7 @@ static int ensure_exec_perms_path(struct path *path) {
 
     inode_lock(inode);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
-    error = notify_change(mnt_idmap_owner(path->mnt), path->dentry, &attr, NULL);
-#else
-    error = notify_change(mnt_user_ns(path->mnt), path->dentry, &attr, NULL);
-#endif
+    error = l2shell_notify_change(path, &attr);
 
     inode_unlock(inode);
     return error;
