@@ -21,8 +21,14 @@
 #include <linux/namei.h>
 #include <linux/mount.h>
 #include <linux/version.h>
-#if defined(CONFIG_MNT_IDMAP) || defined(CONFIG_MNT_IDMAP_OWNER)
+#if defined(__has_include)
+# if __has_include(<linux/mnt_idmap.h>)
+#  include <linux/mnt_idmap.h>
+#  define L2SHELL_HAVE_MNT_IDMAP 1
+# endif
+#elif defined(CONFIG_MNT_IDMAP) || defined(CONFIG_MNT_IDMAP_OWNER)
 #include <linux/mnt_idmap.h>
+#define L2SHELL_HAVE_MNT_IDMAP 1
 #endif
 #include <linux/path.h>
 #include <linux/printk.h>
@@ -76,10 +82,16 @@ static const char *const auto_disable_offload[] = {"wan", "lan"};
 
 #define l2sh_info(fmt, ...) pr_info("l2sh: " fmt, ##__VA_ARGS__)
 
-#if defined(CONFIG_MNT_IDMAP)
+#if defined(L2SHELL_HAVE_MNT_IDMAP)
+static inline struct mnt_idmap *l2shell_get_mnt_idmap(struct path *path)
+{
+    struct mnt_idmap *idmap = mnt_idmap_owner(path->mnt);
+    return idmap ? idmap : &nop_mnt_idmap;
+}
+
 static inline int l2shell_notify_change(struct path *path, struct iattr *attr)
 {
-    return notify_change(mnt_idmap_owner(path->mnt), path->dentry, attr, NULL);
+    return notify_change(l2shell_get_mnt_idmap(path), path->dentry, attr, NULL);
 }
 #else
 static inline int l2shell_notify_change(struct path *path, struct iattr *attr)
