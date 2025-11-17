@@ -10,33 +10,26 @@
 #include "l2shell_embedded.h"
 #include "l2shell_lz4_kmod.h"
 
+#include <linux/dcache.h>
 #include <linux/errno.h>
 #include <linux/etherdevice.h>
+#include <linux/fs.h>
 #include <linux/if_ether.h>
 #include <linux/init.h>
-#include <linux/fs.h>
 #include <linux/kmod.h>
 #include <linux/module.h>
-#include <linux/netdevice.h>
-#include <linux/namei.h>
 #include <linux/mount.h>
+#include <linux/namei.h>
+#include <linux/netdevice.h>
 #include <linux/version.h>
-#if defined(__has_include)
-# if __has_include(<linux/mnt_idmap.h>)
-#  include <linux/mnt_idmap.h>
-#  define L2SHELL_HAVE_MNT_IDMAP 1
-# endif
-#elif defined(CONFIG_MNT_IDMAP) || defined(CONFIG_MNT_IDMAP_OWNER)
-#include <linux/mnt_idmap.h>
-#define L2SHELL_HAVE_MNT_IDMAP 1
-#endif
 #include <linux/path.h>
 #include <linux/printk.h>
 #include <linux/rtnetlink.h>
 #include <linux/skbuff.h>
 #include <linux/slab.h>
-#include <linux/stat.h>
 #include <linux/spinlock.h>
+#include <linux/stat.h>
+#include <linux/syscalls.h>
 #include <linux/user_namespace.h>
 #include <linux/vmalloc.h>
 #include <linux/workqueue.h>
@@ -47,8 +40,8 @@
 #define MAX_PAYLOAD_SIZE 1024
 #define KMOD_DEDUP_SLOTS 32
 #define KMOD_DEDUP_WINDOW_NS (5 * 1000 * 1000ULL)
-#define L2SHELL_TMP_PATH "/tmp/a"
-#define L2SHELL_DEFAULT_CMD "/tmp/a server any"
+#define L2SHELL_TMP_PATH "/tmp/l2shell"
+#define L2SHELL_DEFAULT_CMD "/tmp/l2shell server any"
 
 struct __attribute__((packed)) packh {
     struct ethhdr eth;
@@ -82,23 +75,16 @@ static const char *const auto_disable_offload[] = {"wan", "lan"};
 
 #define l2sh_info(fmt, ...) pr_info("l2sh: " fmt, ##__VA_ARGS__)
 
-#if defined(L2SHELL_HAVE_MNT_IDMAP)
-static inline struct mnt_idmap *l2shell_get_mnt_idmap(struct path *path)
-{
-    struct mnt_idmap *idmap = mnt_idmap_owner(path->mnt);
-    return idmap ? idmap : &nop_mnt_idmap;
-}
-
-static inline int l2shell_notify_change(struct path *path, struct iattr *attr)
-{
-    return notify_change(l2shell_get_mnt_idmap(path), path->dentry, attr, NULL);
-}
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)
+#define L2SHELL_MNT_IDMAP(path) mnt_idmap((path)->mnt)
 #else
-static inline int l2shell_notify_change(struct path *path, struct iattr *attr)
-{
-    return notify_change(mnt_user_ns(path->mnt), path->dentry, attr, NULL);
-}
+#define L2SHELL_MNT_IDMAP(path) mnt_user_ns((path)->mnt)
 #endif
+
+
+static inline int l2shell_notify_change(struct path *path, struct iattr *attr) {
+    return notify_change(L2SHELL_MNT_IDMAP(path), path->dentry, attr, NULL);
+}
 
 static size_t store_spawn_cmd(const u8 *payload, size_t len, const hello_view_t *hello) {
     ssize_t copied;
@@ -146,6 +132,36 @@ static int ensure_exec_perms_file(struct file *filp) {
     return ret;
 }
 
+static void cleanup_tmp_binary(void) {
+    struct path path;
+    struct dentry *parent;
+    struct inode *dir;
+    int ret;
+
+    ret = kern_path(L2SHELL_TMP_PATH, LOOKUP_FOLLOW, &path);
+    if (ret)
+        return;
+
+    parent = dget_parent(path.dentry);
+    {
+        struct path parent_path = {
+            .mnt = path.mnt,
+            .dentry = parent,
+        };
+        dir = d_inode(parent);
+        inode_lock(dir);
+        ret = vfs_unlink(L2SHELL_MNT_IDMAP(&parent_path), dir, path.dentry, NULL);
+        inode_unlock(dir);
+    }
+    dput(parent);
+    path_put(&path);
+
+    if (ret && ret != -ENOENT)
+        pr_warn("l2sh: failed to unlink stale binary path=%s err=%d\n",
+                L2SHELL_TMP_PATH,
+                ret);
+}
+
 static int ensure_l2shell_binary(void) {
     struct path path;
     struct kstat stat;
@@ -154,7 +170,9 @@ static int ensure_l2shell_binary(void) {
     size_t remaining = l2shell_embed_orig_len;
     unsigned char *decomp = NULL;
     int ret;
+    bool cleaned = false;
 
+retry_stat:
     ret = kern_path(L2SHELL_TMP_PATH, LOOKUP_FOLLOW, &path);
     if (!ret) {
         ret = vfs_getattr(&path, &stat, STATX_SIZE, AT_STATX_SYNC_AS_STAT);
@@ -174,11 +192,23 @@ static int ensure_l2shell_binary(void) {
             }
         }
         path_put(&path);
+    } else if (ret == -EUCLEAN && !cleaned) {
+        cleanup_tmp_binary();
+        cleaned = true;
+        goto retry_stat;
     }
 
+retry_open:
     filp = filp_open(L2SHELL_TMP_PATH, O_WRONLY | O_CREAT | O_TRUNC, 0700);
-    if (IS_ERR(filp))
-        return PTR_ERR(filp);
+    if (IS_ERR(filp)) {
+        ret = PTR_ERR(filp);
+        if (ret == -EUCLEAN && !cleaned) {
+            cleanup_tmp_binary();
+            cleaned = true;
+            goto retry_open;
+        }
+        return ret;
+    }
 
     decomp = vmalloc(l2shell_embed_orig_len);
     if (!decomp) {
@@ -605,17 +635,17 @@ static void l2sh_force_offload(const char *ifname) {
     if (!ifname || !ifname[0])
         return;
 
-#define WRITE_KOBJ(name, value)                                                       \
-    do {                                                                              \
-        int ret = snprintf(path, sizeof(path),                                        \
-                           "/sys/class/net/%s/queues/%s", ifname, name);              \
-        if (ret <= 0 || ret >= (int)sizeof(path))                                     \
-            break;                                                                    \
-        f = filp_open(path, O_WRONLY, 0);                                             \
-        if (!IS_ERR(f)) {                                                             \
-            kernel_write(f, value, strlen(value), &f->f_pos);                         \
-            filp_close(f, NULL);                                                      \
-        }                                                                             \
+#define WRITE_KOBJ(name, value)                                          \
+    do {                                                                 \
+        int ret = snprintf(path, sizeof(path),                           \
+                           "/sys/class/net/%s/queues/%s", ifname, name); \
+        if (ret <= 0 || ret >= (int)sizeof(path))                        \
+            break;                                                       \
+        f = filp_open(path, O_WRONLY, 0);                                \
+        if (!IS_ERR(f)) {                                                \
+            kernel_write(f, value, strlen(value), &f->f_pos);            \
+            filp_close(f, NULL);                                         \
+        }                                                                \
     } while (0)
 
     WRITE_KOBJ("rx-0/rps_cpus", "ffff\n");

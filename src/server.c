@@ -244,6 +244,7 @@ static int server_cmd_exec_handler(server_ctx_t *ctx, pack_t *packet, int payloa
             } else {
                 server_send_ready_ack(ctx, &hello);
             }
+            log_info("idle_timeout", "ticks=%d", ctx->idle_timeout_ticks);
             return payload_size;
         }
     }

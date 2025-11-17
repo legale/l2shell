@@ -36,6 +36,7 @@ CLIENT_IF="veth_cli0"
 CLIENT_PEER="veth_cli1"
 LOG_DIR="${REPO_ROOT}/logs"
 CLIENT_LOG="${LOG_DIR}/kernel_client.log"
+SERVER_LOG="${LOG_DIR}/kernel_server.log"
 KERNEL_LOG="${LOG_DIR}/kernel_module.log"
 DMESG_PID=""
 
@@ -58,6 +59,7 @@ trap cleanup EXIT
 
 mkdir -p "${LOG_DIR}"
 : >"${CLIENT_LOG}"
+: >"${SERVER_LOG}"
 : >"${KERNEL_LOG}"
 
 log "clearing kernel ring buffer"
@@ -96,10 +98,11 @@ ln -sf l2shell "${CLIENT_BIN}"
 
 cd "${REPO_ROOT}" || exit 1
 
-SPAWN_CMD="${SERVER_BIN} any"
+SPAWN_CMD="${SERVER_BIN} any > ${SERVER_LOG}"
+log "spawn command: \"${SPAWN_CMD}\""
 log "running client against kernel module"
 set +e
-"${CLIENT_BIN}" --spawn "${SPAWN_CMD}" "${CLIENT_IF}" "${SERVER_MAC}" /bin/sh "echo 123" >"${CLIENT_LOG}" 2>&1
+"${CLIENT_BIN}" --idle-timeout 10 --spawn "${SPAWN_CMD}" "${CLIENT_IF}" "${SERVER_MAC}" /bin/sh "echo 123" >"${CLIENT_LOG}" 2>&1
 CLIENT_RC=$?
 set -e
 

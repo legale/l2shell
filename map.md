@@ -62,7 +62,7 @@
 ### Исправить таймаут сервера
 - [x] изучить текущую логику `server_loop` и `idle_ticks`
 - [x] изменить учёт активности: сброс только при активности клиента
-- [x] прогнать `make test` и `make test-kernel`
+- [x] прогнать `make test` и `make test-kmod`
 
 ### Idle timeout negotiation
 - [x] добавить HELLO TLV и клиентский `--idle-timeout`

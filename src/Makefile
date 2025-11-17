@@ -98,9 +98,9 @@ test-unit: $(TEST_BINARIES)
 		$$target; \
 	done
 
-.PHONY: test-kernel
-test-kernel: $(BIN_MAIN) $(KMOD)
-	sudo ./scripts/test_kernel.sh
+.PHONY: test-kmod
+test-kmod: $(BIN_MAIN) $(KMOD)
+	sudo ./scripts/test_kmod.sh
 
 # kmod targets
 .PHONY: kmod
