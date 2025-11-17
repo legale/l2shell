@@ -33,6 +33,7 @@
 #include <unistd.h>
 
 #define RESPONSE_TIMEOUT_NS (1000ULL * NSEC_PER_MSEC)
+#define CLIENT_IDLE_TIMEOUT_DEFAULT_SEC 30
 
 typedef struct {
     const char *iface;
@@ -41,6 +42,7 @@ typedef struct {
     const char *shell;
     const char *cmd;
     int local_echo;
+    int idle_timeout;
 } client_args_t;
 
 typedef struct {
@@ -277,12 +279,17 @@ static int client_send_hello(client_ctx_t *ctx, const client_args_t *args, u64 *
     }
     u8 payload[MAX_PAYLOAD_SIZE] = {0};
     u64 nonce = client_generate_nonce();
+    int timeout = CLIENT_IDLE_TIMEOUT_DEFAULT_SEC;
+    if (args && args->idle_timeout > 0)
+        timeout = args->idle_timeout;
     hello_builder_t builder = {
         .spawn_cmd = spawn_cmd,
         .shell_cmd = shell_cmd,
         .nonce = nonce,
         .include_spawn = include_spawn,
         .include_nonce = 1,
+        .include_idle_timeout = 1,
+        .idle_timeout_seconds = timeout,
     };
     int hello_len = hello_build(payload, sizeof(payload), &builder);
     if (hello_len < 0) {
@@ -473,6 +480,16 @@ static int client_loop(client_ctx_t *ctx) {
 }
 
 /* cli parser using cli_helper.h style */
+static int parse_idle_timeout_value(const char *arg, int *value) {
+    if (!arg || !value) return -1;
+    char *endptr = NULL;
+    long parsed = strtol(arg, &endptr, 10);
+    if (!endptr || *endptr != '\0') return -1;
+    if (parsed <= 0 || parsed > INT_MAX) return -1;
+    *value = (int)parsed;
+    return 0;
+}
+
 static int parse_client_args(int argc, char **argv, client_args_t *args) {
     if (!args || !argv) return 1;
     memset(args, 0, sizeof(*args));
@@ -492,6 +509,16 @@ static int parse_client_args(int argc, char **argv, client_args_t *args) {
         if (matches(*argv, "--spawn")) {
             NEXT_ARG();
             args->spawn_cmd = *argv;
+            continue;
+        }
+        if (matches(*argv, "--idle-timeout")) {
+            NEXT_ARG();
+            int value = 0;
+            if (parse_idle_timeout_value(*argv, &value) != 0) {
+                log_error("client_args", "event=invalid_timeout value=%s", *argv);
+                return 1;
+            }
+            args->idle_timeout = value;
             continue;
         }
         if (!args->iface) {
@@ -525,6 +552,8 @@ int client_main(int argc, char **argv) {
     client_args_t a = {0};
     int pr = parse_client_args(argc, argv, &a);
     if (pr != 0) return pr > 0 ? 0 : 1;
+    if (a.idle_timeout <= 0)
+        a.idle_timeout = CLIENT_IDLE_TIMEOUT_DEFAULT_SEC;
 
     client_ctx_t ctx;
     if (client_ctx_init(&ctx, &a) != 0)
@@ -576,5 +605,5 @@ int client_main(int argc, char **argv) {
 
 /* usage printer */
 static void usage(const char *p) {
-    fprintf(stderr, "usage: %s [-e|--echo] [--spawn <cmd>] [-h|--help] <iface> <server-mac> [shell] [cmd]\n", p);
+    fprintf(stderr, "usage: %s [-e|--echo] [--spawn <cmd>] [--idle-timeout <sec>] [-h|--help] <iface> <server-mac> [shell] [cmd]\n", p);
 }

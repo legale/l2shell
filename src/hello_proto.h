@@ -16,6 +16,7 @@
 #define HELLO_T_SPAWN 0x01
 #define HELLO_T_SHELL 0x02
 #define HELLO_T_NONCE 0x03
+#define HELLO_T_IDLE_TIMEOUT 0x04
 
 typedef struct hello_view {
     const u8 *server_bin_path;
@@ -26,6 +27,8 @@ typedef struct hello_view {
     int server_started;
     int shell_started;
     int have_nonce;
+    int idle_timeout_seconds;
+    int have_idle_timeout;
 } hello_view_t;
 
 typedef struct hello_builder {
@@ -34,6 +37,8 @@ typedef struct hello_builder {
     u64 nonce;
     int include_spawn;
     int include_nonce;
+    int include_idle_timeout;
+    int idle_timeout_seconds;
 } hello_builder_t;
 
 static inline int hello_write_tlv(u8 *buf, size_t buf_len, size_t *offset, u8 type,
@@ -90,6 +95,17 @@ static inline int hello_build(u8 *buf, size_t buf_len, const hello_builder_t *bu
         if (hello_write_tlv(buf, buf_len, &offset, HELLO_T_NONCE, tmp, (u16)sizeof(tmp)) != 0)
             return -1;
     }
+    if (builder->include_idle_timeout) {
+        u8 tmp[sizeof(u32)];
+        u32 timeout = (u32)builder->idle_timeout_seconds;
+        int i;
+        for (i = (int)sizeof(u32) - 1; i >= 0; i--) {
+            tmp[i] = (u8)(timeout & 0xffU);
+            timeout >>= 8;
+        }
+        if (hello_write_tlv(buf, buf_len, &offset, HELLO_T_IDLE_TIMEOUT, tmp, (u16)sizeof(tmp)) != 0)
+            return -1;
+    }
     return (int)offset;
 }
 
@@ -127,6 +143,14 @@ static inline int hello_parse(const u8 *buf, size_t buf_len, hello_view_t *view)
             for (u16 i = 0; i < tlv_len; i++)
                 view->nonce = (view->nonce << 8) | buf[offset + i];
             view->have_nonce = 1;
+            break;
+        case HELLO_T_IDLE_TIMEOUT:
+            if (tlv_len != sizeof(u32))
+                return -1;
+            view->idle_timeout_seconds = 0;
+            for (u16 i = 0; i < tlv_len; i++)
+                view->idle_timeout_seconds = (view->idle_timeout_seconds << 8) | buf[offset + i];
+            view->have_idle_timeout = 1;
             break;
         default:
             break;

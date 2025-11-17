@@ -31,9 +31,9 @@
 #include <time.h> //difftime
 #include <unistd.h>
 
-#define TIMEOUT_SEC 5
+#define SERVER_IDLE_TIMEOUT_DEFAULT_SEC 30
+#define SERVER_IDLE_TIMEOUT_MAX_SEC 600
 #define DELAY_SEC 1
-#define SERVER_IDLE_TICKS (TIMEOUT_SEC / DELAY_SEC)
 #define SERVER_DUP_RING 16
 #define SERVER_DUP_WINDOW_NS (2ULL * NSEC_PER_MSEC)
 
@@ -60,6 +60,8 @@ static u32 server_frame_fingerprint(const pack_t *packet, size_t len);
 static int server_frame_dedup_should_drop(const pack_t *packet, size_t len, const struct sockaddr_ll *peer);
 static int server_nonce_confirm_handler(server_ctx_t *ctx, const u8 *payload, size_t payload_size, const struct sockaddr_ll *peer);
 static int server_hello_handler(server_ctx_t *ctx, const u8 *payload, size_t payload_size, const struct sockaddr_ll *peer);
+static inline int server_timeout_to_ticks(int seconds);
+static void server_apply_idle_timeout(server_ctx_t *ctx, int seconds);
 
 typedef struct server_args {
     const char *iface;
@@ -74,7 +76,25 @@ struct server_ctx {
     int any_iface;
     u64 pending_nonce;
     int awaiting_nonce_confirm;
+    int idle_timeout_ticks;
 };
+
+static inline int server_timeout_to_ticks(int seconds) {
+    int secs = seconds;
+    if (secs <= 0)
+        secs = 1;
+    return (secs + DELAY_SEC - 1) / DELAY_SEC;
+}
+
+static void server_apply_idle_timeout(server_ctx_t *ctx, int seconds) {
+    if (!ctx) return;
+    int secs = seconds;
+    if (secs <= 0)
+        secs = SERVER_IDLE_TIMEOUT_DEFAULT_SEC;
+    if (secs > SERVER_IDLE_TIMEOUT_MAX_SEC)
+        secs = SERVER_IDLE_TIMEOUT_MAX_SEC;
+    ctx->idle_timeout_ticks = server_timeout_to_ticks(secs);
+}
 
 static ssize_t write_all(int fd, const void *buf, size_t count) {
     const char *ptr = (const char *)buf;
@@ -215,6 +235,9 @@ static int server_cmd_exec_handler(server_ctx_t *ctx, pack_t *packet, int payloa
                 ctx->awaiting_nonce_confirm = 1;
             } else {
                 ctx->awaiting_nonce_confirm = 0;
+            }
+            if (hello.have_idle_timeout) {
+                server_apply_idle_timeout(ctx, hello.idle_timeout_seconds);
             }
             if (server_exec(hello.cmd, hello.cmd_len) != 0) {
                 log_error("server_launch", "event=hello_launch_failed");
@@ -457,6 +480,7 @@ static int server_ctx_init(server_ctx_t *ctx, const server_args_t *args) {
     }
 
     ctx->peer_addr = ctx->bind_addr;
+    server_apply_idle_timeout(ctx, SERVER_IDLE_TIMEOUT_DEFAULT_SEC);
     return 0;
 }
 
@@ -518,9 +542,9 @@ static int server_loop(server_ctx_t *ctx) {
         }
 
         idle_ticks++;
-        if (idle_ticks > SERVER_IDLE_TICKS) {
+        if (idle_ticks > ctx->idle_timeout_ticks) {
             log_info("server_loop", "event=idle_timeout ticks=%d limit=%d",
-                     idle_ticks, SERVER_IDLE_TICKS);
+                     idle_ticks, ctx->idle_timeout_ticks);
             terminate_shell_process();
             break;
         }

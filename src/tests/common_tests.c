@@ -63,6 +63,24 @@ static void test_hello_build_without_spawn(void) {
     PRINT_TEST_PASSED();
 }
 
+static void test_hello_timeout_tlv(void) {
+    PRINT_TEST_START("hello_timeout_tlv");
+    u8 payload[MAX_PAYLOAD_SIZE] = {0};
+    hello_builder_t builder = {
+        .shell_cmd = "test-cmd",
+        .include_idle_timeout = 1,
+        .idle_timeout_seconds = 45,
+    };
+    int len = hello_build(payload, sizeof(payload), &builder);
+    TEST_ASSERT(len > 0);
+
+    hello_view_t view;
+    TEST_ASSERT(hello_parse(payload, (size_t)len, &view) == 0);
+    TEST_ASSERT(view.have_idle_timeout);
+    TEST_ASSERT(view.idle_timeout_seconds == 45);
+    PRINT_TEST_PASSED();
+}
+
 static void test_hello_parse_rejects_bad_version(void) {
     PRINT_TEST_START("hello_parse_rejects_bad_version");
     u8 payload[1] = {HELLO_VERSION + 1};
@@ -382,6 +400,7 @@ int main(int argc, char **argv) {
     const struct test_entry tests[] = {
         {"hello_build_and_parse", test_hello_build_and_parse},
         {"hello_build_without_spawn", test_hello_build_without_spawn},
+        {"hello_timeout_tlv", test_hello_timeout_tlv},
         {"hello_parse_rejects_bad_version", test_hello_parse_rejects_bad_version},
         {"hello_parse_rejects_truncated_tlv", test_hello_parse_rejects_truncated_tlv},
         {"enc_dec_roundtrip", test_enc_dec_roundtrip},
