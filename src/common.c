@@ -104,19 +104,12 @@ void debug_dump_frame(const char *prefix, const u8 *data, size_t len) {
     const char *path = "logs/clientserver.log";
     int fd = open(path, O_WRONLY | O_CREAT | O_APPEND, 0666);
 
-    if (fd < 0) {
-        log_error_errno("debug_dump", "open='%s'", path);
+    if (fd < 0)
         return;
-    }
-    if (fchmod(fd, (mode_t)0666) < 0) {
-        log_error_errno("debug_dump", "fchmod='%s'", path);
-        close(fd);
-        return;
-    }
+    (void)fchmod(fd, (mode_t)0666);
 
     FILE *log_file = fdopen(fd, "a");
     if (!log_file) {
-        log_error_errno("debug_dump", "fdopen");
         close(fd);
         return;
     }
