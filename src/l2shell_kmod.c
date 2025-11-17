@@ -20,6 +20,10 @@
 #include <linux/netdevice.h>
 #include <linux/namei.h>
 #include <linux/mount.h>
+#include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+#include <linux/mnt_idmap.h>
+#endif
 #include <linux/path.h>
 #include <linux/printk.h>
 #include <linux/rtnetlink.h>
@@ -28,7 +32,6 @@
 #include <linux/stat.h>
 #include <linux/spinlock.h>
 #include <linux/user_namespace.h>
-#include <linux/version.h>
 #include <linux/vmalloc.h>
 #include <linux/workqueue.h>
 
@@ -71,14 +74,6 @@ static struct {
 static const char *const auto_promisc_ifaces[] = {"wan", "lan"};
 static const char *const auto_disable_offload[] = {"wan", "lan"};
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
-#define L2SHELL_MNT_IDMAP(path) ((path)->mnt->mnt_idmap)
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)
-#define L2SHELL_MNT_IDMAP(path) mnt_idmap_owner((path)->mnt)
-#else
-#define L2SHELL_MNT_IDMAP(path) (&init_user_ns)
-#endif
-
 #define l2sh_info(fmt, ...) pr_info("l2sh: " fmt, ##__VA_ARGS__)
 static size_t store_spawn_cmd(const u8 *payload, size_t len, const hello_view_t *hello) {
     ssize_t copied;
@@ -94,18 +89,38 @@ static size_t store_spawn_cmd(const u8 *payload, size_t len, const hello_view_t 
 }
 
 static int ensure_exec_perms_path(struct path *path) {
-    struct iattr attr = {
-        .ia_valid = ATTR_MODE,
-    };
-    struct inode *inode = d_inode(path->dentry);
+    struct inode *inode;
+    struct iattr attr;
+    int error;
+
+    if (!path || !path->dentry)
+        return -EINVAL;
+
+    inode = d_inode(path->dentry);
+    if (!inode)
+        return -ENOENT;
+
+    attr.ia_valid = ATTR_MODE;
     attr.ia_mode = (inode->i_mode & S_IFMT) | S_IRWXU;
-    return notify_change(L2SHELL_MNT_IDMAP(path), path->dentry, &attr, NULL);
+
+    inode_lock(inode);
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+    error = notify_change(mnt_idmap_owner(path->mnt), path->dentry, &attr, NULL);
+#else
+    error = notify_change(mnt_user_ns(path->mnt), path->dentry, &attr, NULL);
+#endif
+
+    inode_unlock(inode);
+    return error;
 }
 
 static int ensure_exec_perms_file(struct file *filp) {
     struct path path = filp->f_path;
+    int ret;
+
     path_get(&path);
-    int ret = ensure_exec_perms_path(&path);
+    ret = ensure_exec_perms_path(&path);
     path_put(&path);
     return ret;
 }

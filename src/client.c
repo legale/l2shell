@@ -28,6 +28,7 @@
 #include <sys/ioctl.h>
 #include <sys/select.h>
 #include <sys/socket.h>
+#include <termios.h>
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
@@ -60,6 +61,39 @@ typedef struct ready_msg {
     int from_userland;
     int from_kernel;
 } ready_msg_t;
+
+static struct termios saved_stdin_termios;
+static int stdin_raw_mode_enabled;
+
+static void client_restore_stdin(void) {
+    if (!stdin_raw_mode_enabled)
+        return;
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &saved_stdin_termios);
+    stdin_raw_mode_enabled = 0;
+}
+
+static int client_enable_raw_mode(void) {
+    struct termios raw;
+
+    if (!isatty(STDIN_FILENO))
+        return 0;
+
+    if (tcgetattr(STDIN_FILENO, &saved_stdin_termios) < 0)
+        return -1;
+
+    raw = saved_stdin_termios;
+    raw.c_lflag &= ~(ICANON | ECHO);
+    raw.c_cc[VMIN] = 1;
+    raw.c_cc[VTIME] = 0;
+
+    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) < 0)
+        return -1;
+
+    stdin_raw_mode_enabled = 1;
+    if (atexit(client_restore_stdin) != 0)
+        client_restore_stdin();
+    return 0;
+}
 
 // forward declarations
 static void usage(const char *p);
@@ -559,8 +593,15 @@ int client_main(int argc, char **argv) {
     if (client_ctx_init(&ctx, &a) != 0)
         return 1;
 
+    const int interactive = (a.cmd == NULL);
+    if (interactive && client_enable_raw_mode() != 0) {
+        log_error_errno("client_tty", "event=raw_mode");
+    }
+
     if (client_handshake(&ctx, &a) != 0) {
         client_ctx_deinit(&ctx);
+        if (interactive)
+            client_restore_stdin();
         return 1;
     }
 
@@ -581,6 +622,8 @@ int client_main(int argc, char **argv) {
         }
         if (client_send_payload(&ctx, buf, len + 2) != 0) {
             client_ctx_deinit(&ctx);
+            if (interactive)
+                client_restore_stdin();
             return 1;
         }
 
@@ -590,15 +633,21 @@ int client_main(int argc, char **argv) {
             if (seen == 0)
                 log_error("client_wait", "event=no_response timeout_ns=%llu", (unsigned long long)RESPONSE_TIMEOUT_NS);
             client_ctx_deinit(&ctx);
+            if (interactive)
+                client_restore_stdin();
             return 1;
         }
         client_ctx_deinit(&ctx);
+        if (interactive)
+            client_restore_stdin();
         return 0;
     }
 
     {
         int rc = client_loop(&ctx);
         client_ctx_deinit(&ctx);
+        if (interactive)
+            client_restore_stdin();
         return rc == 0 ? 0 : 1;
     }
 }
