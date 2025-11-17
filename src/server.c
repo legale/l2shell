@@ -498,22 +498,21 @@ static int server_loop(server_ctx_t *ctx) {
 
         check_shell_termination();
 
-        int had_activity = 0;
+        int client_activity = 0;
 
         if (ready > 0) {
             if (FD_ISSET(ctx->sockfd, &fds)) {
                 if (server_socket_event_handler(ctx, &rx_packet) >= 0) {
-                    had_activity = 1;
+                    client_activity = 1;
                 }
             }
 
             if (sh_fd != -1 && FD_ISSET(sh_fd, &fds)) {
                 server_handle_shell_event(ctx, &tx_packet);
-                had_activity = 1;
             }
         }
 
-        if (had_activity) {
+        if (client_activity) {
             idle_ticks = 0;
             continue;
         }
