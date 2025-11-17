@@ -72,7 +72,7 @@ static const char *const auto_promisc_ifaces[] = {"wan", "lan"};
 static const char *const auto_disable_offload[] = {"wan", "lan"};
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)
-#define L2SHELL_MNT_IDMAP(path) ((path)->mnt->mnt_idmap)
+#define L2SHELL_MNT_IDMAP(path) mnt_idmap_owner((path)->mnt)
 #else
 #define L2SHELL_MNT_IDMAP(path) (&init_user_ns)
 #endif
