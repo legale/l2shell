@@ -613,7 +613,7 @@ static void disable_capture(void) {
         return;
     dev_remove_pack(&l2_pt);
     g.capture_enabled = false;
-    pr_info("l2sh: capture disabled, handing off to userspace server\n");
+    pr_info("l2sh: listening stopped\n");
 }
 
 static void enable_capture(void) {
@@ -621,7 +621,7 @@ static void enable_capture(void) {
         return;
     dev_add_pack(&l2_pt);
     g.capture_enabled = true;
-    pr_info("l2sh: capture enabled\n");
+    pr_info("l2sh: listening started\n");
 }
 
 static void schedule_promisc_work(void) {
