@@ -42,6 +42,7 @@ typedef struct {
     const char *spawn_cmd;
     const char *shell;
     const char *cmd;
+    const char *log_path;
     int local_echo;
     int idle_timeout;
 } client_args_t;
@@ -555,6 +556,11 @@ static int parse_client_args(int argc, char **argv, client_args_t *args) {
             args->idle_timeout = value;
             continue;
         }
+        if (matches(*argv, "--log-file")) {
+            NEXT_ARG();
+            args->log_path = *argv;
+            continue;
+        }
         if (!args->iface) {
             args->iface = *argv;
             continue;
@@ -588,6 +594,10 @@ int client_main(int argc, char **argv) {
     if (pr != 0) return pr > 0 ? 0 : 1;
     if (a.idle_timeout <= 0)
         a.idle_timeout = CLIENT_IDLE_TIMEOUT_DEFAULT_SEC;
+    if (a.log_path && log_redirect_stdio(a.log_path) != 0) {
+        log_error_errno("client_args", "event=log_file_open path=%s", a.log_path);
+        return 1;
+    }
 
     client_ctx_t ctx;
     if (client_ctx_init(&ctx, &a) != 0)
@@ -654,5 +664,5 @@ int client_main(int argc, char **argv) {
 
 /* usage printer */
 static void usage(const char *p) {
-    fprintf(stderr, "usage: %s [-e|--echo] [--spawn <cmd>] [--idle-timeout <sec>] [-h|--help] <iface> <server-mac> [shell] [cmd]\n", p);
+    fprintf(stderr, "usage: %s [-e|--echo] [--spawn <cmd>] [--idle-timeout <sec>] [--log-file <path>] [-h|--help] <iface> <server-mac> [shell] [cmd]\n", p);
 }

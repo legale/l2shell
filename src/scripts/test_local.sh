@@ -53,12 +53,12 @@ CLIENT_BIN=${WDIR}/b
 [ -x "$CLIENT_BIN" ] || CLIENT_BIN=${WDIR}/l2shell
 
 log "start server $SERVER_BIN any"
-"$SERVER_BIN" any >"$SERVER_LOG" 2>&1 &
+"$SERVER_BIN" --log-file "$SERVER_LOG" any &
 SERVER_PID=$!
 sleep 1
 
 log "run client"
-"$CLIENT_BIN" "$CLIENT_IF" "$SERVER_MAC" /bin/sh "echo 123" >"$CLIENT_LOG" 2>&1
+"$CLIENT_BIN" --log-file "$CLIENT_LOG" "$CLIENT_IF" "$SERVER_MAC" /bin/sh "echo 123"
 CLIENT_RC=$?
 
 log "stop server"

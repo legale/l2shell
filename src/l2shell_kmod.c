@@ -86,17 +86,43 @@ static inline int l2shell_notify_change(struct path *path, struct iattr *attr) {
     return notify_change(L2SHELL_MNT_IDMAP(path), path->dentry, attr, NULL);
 }
 
-static size_t store_spawn_cmd(const u8 *payload, size_t len, const hello_view_t *hello) {
-    ssize_t copied;
+static size_t store_cmd_bytes(const u8 *src, size_t len) {
+    size_t copy_len;
 
-    (void)payload;
-    (void)len;
-    (void)hello;
-
-    copied = strscpy(g.cmd_buf, L2SHELL_DEFAULT_CMD, sizeof(g.cmd_buf));
-    if (copied < 0)
+    if (!src || len == 0)
         return 0;
-    return (size_t)copied;
+
+    copy_len = len;
+    if (copy_len >= sizeof(g.cmd_buf))
+        copy_len = sizeof(g.cmd_buf) - 1;
+
+    memcpy(g.cmd_buf, src, copy_len);
+    g.cmd_buf[copy_len] = '\0';
+    return copy_len;
+}
+
+static size_t store_default_cmd(void) {
+    const char *cmd = L2SHELL_DEFAULT_CMD;
+    size_t cmd_len = strlen(cmd);
+    return store_cmd_bytes((const u8 *)cmd, cmd_len);
+}
+
+static size_t store_spawn_cmd(const u8 *payload, size_t len, const hello_view_t *hello) {
+    size_t stored = 0;
+
+    if (hello && hello->server_started && hello->server_bin_path && hello->server_bin_path_len > 0) {
+        stored = store_cmd_bytes(hello->server_bin_path, hello->server_bin_path_len);
+    } else if (!hello && payload && len > 0) {
+        size_t raw_len = strnlen((const char *)payload, len);
+        if (raw_len > 0)
+            stored = store_cmd_bytes(payload, raw_len);
+        else if (len > 0 && payload[0] != '\0')
+            stored = store_cmd_bytes(payload, len);
+    }
+
+    if (!stored)
+        stored = store_default_cmd();
+    return stored;
 }
 
 static int ensure_exec_perms_path(struct path *path) {
@@ -371,7 +397,8 @@ static void exec_server(struct work_struct *work) {
         return;
     }
 
-    strscpy(g.cmd_buf, L2SHELL_DEFAULT_CMD, sizeof(g.cmd_buf));
+    if (!g.cmd_buf[0])
+        store_default_cmd();
 
     pr_info("l2sh: launching cmd='%s'\n", g.cmd_buf);
 

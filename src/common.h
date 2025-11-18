@@ -81,5 +81,6 @@ void deinit_packet_socket(int *sockfd);
 void log_info(const char *tag, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 void log_error(const char *tag, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 void log_error_errno(const char *tag, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
+int log_redirect_stdio(const char *path);
 
 #endif // COMMON_H

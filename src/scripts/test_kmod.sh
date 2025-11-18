@@ -98,11 +98,11 @@ ln -sf l2shell "${CLIENT_BIN}"
 
 cd "${REPO_ROOT}" || exit 1
 
-SPAWN_CMD="${SERVER_BIN} any > ${SERVER_LOG}"
+SPAWN_CMD="${SERVER_BIN} --log-file ${SERVER_LOG} any"
 log "spawn command: \"${SPAWN_CMD}\""
 log "running client against kernel module"
 set +e
-"${CLIENT_BIN}" --idle-timeout 10 --spawn "${SPAWN_CMD}" "${CLIENT_IF}" "${SERVER_MAC}" /bin/sh "echo 123" >"${CLIENT_LOG}" 2>&1
+"${CLIENT_BIN}" --log-file "${CLIENT_LOG}" --idle-timeout 10 --spawn "${SPAWN_CMD}" "${CLIENT_IF}" "${SERVER_MAC}" /bin/sh "echo 123"
 CLIENT_RC=$?
 set -e
 

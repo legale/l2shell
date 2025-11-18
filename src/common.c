@@ -127,6 +127,33 @@ void debug_dump_frame(const char *prefix, const u8 *data, size_t len) {
     fclose(log_file);
 }
 
+int log_redirect_stdio(const char *path) {
+    int fd;
+
+    if (!path || !path[0])
+        return 0;
+
+    fd = open(path, O_WRONLY | O_CREAT | O_APPEND, 0666);
+    if (fd < 0)
+        return -1;
+
+    if (dup2(fd, STDOUT_FILENO) < 0) {
+        close(fd);
+        return -1;
+    }
+    if (dup2(fd, STDERR_FILENO) < 0) {
+        close(fd);
+        return -1;
+    }
+
+    if (fd > STDERR_FILENO)
+        close(fd);
+
+    setvbuf(stdout, NULL, _IOLBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
+    return 0;
+}
+
 static void log_internal(const char *level, const char *tag, const char *fmt, va_list ap) {
     if (!level) level = "info";
     if (!tag) tag = "app";

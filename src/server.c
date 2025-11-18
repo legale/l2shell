@@ -66,6 +66,7 @@ static void server_apply_idle_timeout(server_ctx_t *ctx, int seconds);
 typedef struct server_args {
     const char *iface;
     int any_iface;
+    const char *log_path;
 } server_args_t;
 
 struct server_ctx {
@@ -448,12 +449,22 @@ static int parse_server_args(int argc, char **argv, server_args_t *args) {
             usage(argv0);
             return 1;
         }
+        if (matches(*argv, "--log-file")) {
+            NEXT_ARG();
+            args->log_path = *argv;
+            continue;
+        }
         if (strcmp(*argv, "any") == 0) {
             args->any_iface = 1;
-            return 0;
+            args->iface = NULL;
+            continue;
         }
-        args->iface = *argv;
-        return 0;
+        if (!args->iface) {
+            args->iface = *argv;
+            continue;
+        }
+        log_error("server_args", "event=unexpected_arg value=%s", *argv);
+        return 1;
     }
 
     if (!args->iface && !args->any_iface) {
@@ -561,6 +572,10 @@ int server_main(int argc, char *argv[]) {
 
     int pr = parse_server_args(argc, argv, &args);
     if (pr != 0) return pr > 0 ? 0 : 1;
+    if (args.log_path && log_redirect_stdio(args.log_path) != 0) {
+        log_error_errno("server_args", "event=log_file_open path=%s", args.log_path);
+        return 1;
+    }
 
     if (server_ctx_init(&ctx, &args) != 0) {
         return 1;
@@ -572,7 +587,7 @@ int server_main(int argc, char *argv[]) {
 }
 
 static void usage(const char *prog) {
-    fprintf(stderr, "Usage: %s <interface> [--help]\n", prog);
+    fprintf(stderr, "Usage: %s [--log-file <path>] <interface|any> [--help]\n", prog);
 }
 static u64 server_mono_ns(void) {
     struct timespec ts;
