@@ -191,6 +191,7 @@ static inline void enc_dec(const u8 *input, u8 *output, const u8 *key, size_t le
         /* mix bits to get keystream byte */
         ks = (u8)(s ^ (s >> 8) ^ (s >> 16) ^ (s >> 24));
         ks ^= (u8)i;
+        ks = (u8)(ks + key[i & 3]);
 
         output[i] = input[i] ^ ks;
     }
