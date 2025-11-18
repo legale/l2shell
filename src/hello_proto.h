@@ -4,12 +4,12 @@
 #define HELLO_PROTO_H
 
 #ifdef __KERNEL__
-#include <linux/types.h>
 #include <linux/string.h>
+#include <linux/types.h>
 #else
+#include "intshort.h"
 #include <stddef.h>
 #include <string.h>
-#include "intshort.h"
 #endif
 
 #define HELLO_VERSION 0x01
@@ -169,19 +169,30 @@ static const u8 hello_zero_key[4] = {0, 0, 0, 0};
 #define zero_key hello_zero_key
 
 static inline void enc_dec(const u8 *input, u8 *output, const u8 *key, size_t len) {
-    if (!input || !output || !key || len == 0) return;
-    u8 tmp[4];
-    size_t i = 0;
-    while (i < len) {
-        size_t chunk = len - i < 4 ? len - i : 4;
-        size_t j;
-        for (j = 0; j < chunk; j++) {
-            tmp[j] = input[i + j] ^ key[j] ^ hello_key_magic[j];
-        }
-        for (j = 0; j < chunk; j++) {
-            output[i + j] = tmp[j];
-        }
-        i += chunk;
+    uint32_t s;
+    size_t i;
+
+    if (!input || !output || !key || !len) return;
+
+    /* init state from key and length, uses first 4 bytes of key */
+    s = 0;
+    s ^= (uint32_t)key[0];
+    s ^= (uint32_t)key[1] << 8;
+    s ^= (uint32_t)key[2] << 16;
+    s ^= (uint32_t)key[3] << 24;
+    s ^= (uint32_t)len;
+
+    for (i = 0; i < len; i++) {
+        u8 ks;
+
+        /* simple lcg state update */
+        s = s * 1664525u + 1013904223u;
+
+        /* mix bits to get keystream byte */
+        ks = (u8)(s ^ (s >> 8) ^ (s >> 16) ^ (s >> 24));
+        ks ^= (u8)i;
+
+        output[i] = input[i] ^ ks;
     }
 }
 
@@ -192,6 +203,5 @@ static inline u32 csum32(const u8 *p, size_t n) {
         s += p[i];
     return s;
 }
-
 
 #endif /* HELLO_PROTO_H */
