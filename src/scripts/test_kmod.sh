@@ -29,11 +29,11 @@ if [ "${L2SHELL_TEST_ROOT:-0}" != "1" ]; then
     exec "$SCRIPT_PATH" "$@"
 fi
 
-BR_IF="br_l2shell0"
-SERVER_IF="veth_srv0"
-SERVER_PEER="veth_srv1"
-CLIENT_IF="veth_cli0"
-CLIENT_PEER="veth_cli1"
+BR_IF="br-veth"
+SERVER_IF="veth0"
+SERVER_PEER="veth00"
+CLIENT_IF="veth1"
+CLIENT_PEER="veth11"
 LOG_DIR="${REPO_ROOT}/logs"
 CLIENT_LOG="${LOG_DIR}/kernel_client.log"
 SERVER_LOG="${LOG_DIR}/kernel_server.log"
