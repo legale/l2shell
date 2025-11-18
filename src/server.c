@@ -16,6 +16,7 @@
 #include <assert.h>
 #include <ctype.h> // isspace
 #include <errno.h> //EINTR MACRO
+#include <stdarg.h>
 #include <fcntl.h> // Для функции fcntl
 #include <net/if.h>
 #include <netinet/ether.h>
@@ -48,11 +49,11 @@ static frame_dedup_cache_t server_dedup = {
 
 typedef struct server_ctx server_ctx_t;
 
-static void start_shell_proc(const char *command);
+static pid_t start_shell_proc(const char *command);
 static void terminate_shell_process(void);
-static int server_exec(const u8 *payload, size_t payload_size);
+static int server_exec(server_ctx_t *ctx, const u8 *payload, size_t payload_size);
 static ssize_t write_all(int fd, const void *buf, size_t count);
-static void check_shell_termination(void);
+static int check_shell_termination(server_ctx_t *ctx);
 static void usage(const char *prog);
 static u64 server_mono_ns(void);
 static void server_format_ifname(int ifindex, char buf[IFNAMSIZ]);
@@ -79,6 +80,50 @@ struct server_ctx {
     int awaiting_nonce_confirm;
     int idle_timeout_ticks;
 };
+
+static void server_send_tagged(server_ctx_t *ctx, const char *tag, const char *fmt, ...) {
+    char message[MAX_PAYLOAD_SIZE];
+    va_list ap;
+    int prefix_len;
+    int payload_len;
+    pack_t packet;
+    int frame_len;
+
+    if (!ctx || ctx->sockfd < 0 || !fmt)
+        return;
+
+    prefix_len = snprintf(message, sizeof(message), "level=info tag=%s ",
+                          tag ? tag : "server");
+    if (prefix_len < 0 || prefix_len >= (int)sizeof(message))
+        return;
+
+    va_start(ap, fmt);
+    payload_len = vsnprintf(message + prefix_len,
+                            sizeof(message) - (size_t)prefix_len,
+                            fmt,
+                            ap);
+    va_end(ap);
+    if (payload_len < 0)
+        return;
+    payload_len += prefix_len;
+    if (payload_len >= (int)sizeof(message))
+        payload_len = (int)sizeof(message) - 1;
+    message[payload_len++] = '\n';
+
+    if (payload_len <= 0)
+        return;
+    frame_len = build_packet(&packet, (size_t)payload_len,
+                             (u8 *)ctx->ifr.ifr_hwaddr.sa_data,
+                             (u8 *)ctx->peer_addr.sll_addr,
+                             SERVER_SIGNATURE);
+    if (frame_len < 0)
+        return;
+
+    if (sendto(ctx->sockfd, &packet, (size_t)frame_len, 0,
+               (struct sockaddr *)&ctx->peer_addr, sizeof(ctx->peer_addr)) < 0) {
+        log_error_errno("server_tx", "event=status_send");
+    }
+}
 
 static inline int server_timeout_to_ticks(int seconds) {
     int secs = seconds;
@@ -240,7 +285,7 @@ static int server_cmd_exec_handler(server_ctx_t *ctx, pack_t *packet, int payloa
             if (hello.have_idle_timeout) {
                 server_apply_idle_timeout(ctx, hello.idle_timeout_seconds);
             }
-            if (server_exec(hello.cmd, hello.cmd_len) != 0) {
+            if (server_exec(ctx, hello.cmd, hello.cmd_len) != 0) {
                 log_error("server_launch", "event=hello_launch_failed");
             } else {
                 server_send_ready_ack(ctx, &hello);
@@ -257,7 +302,7 @@ static int server_cmd_exec_handler(server_ctx_t *ctx, pack_t *packet, int payloa
         cmd = default_cmd;
         cmd_sz = sizeof(default_cmd) - 1;
     }
-    if (server_exec(cmd, cmd_sz) != 0) {
+    if (server_exec(ctx, cmd, cmd_sz) != 0) {
         log_error("server_launch", "event=launch_failed");
     }
     return payload_size;
@@ -314,7 +359,9 @@ static ssize_t server_socket_event_handler(server_ctx_t *ctx, pack_t *packet) {
     return server_payload_handler(ctx, packet, payload_size, &peer);
 }
 
-static int server_exec(const u8 *payload, size_t payload_size) {
+static int server_exec(server_ctx_t *ctx, const u8 *payload, size_t payload_size) {
+    if (!ctx)
+        return -1;
     if (payload_size == 0) {
         log_error("server_launch", "event=empty_payload");
         return -1;
@@ -331,7 +378,9 @@ static int server_exec(const u8 *payload, size_t payload_size) {
         log_error("server_launch", "event=payload_null");
         return -1;
     }
-    start_shell_proc(command_buf);
+    if (start_shell_proc(command_buf) < 0)
+        return -1;
+    server_send_tagged(ctx, "server_shell", "event=started pid=%d cmd='%s'", (int)pid, command_buf);
     return 0;
 }
 
@@ -371,10 +420,10 @@ static void server_handle_shell_event(server_ctx_t *ctx, pack_t *packet) {
     }
 }
 
-static void start_shell_proc(const char *command) {
+static pid_t start_shell_proc(const char *command) {
     if (!command) {
         log_error("server_shell", "cmd=NULL");
-        return;
+        return -1;
     }
     pid_t child;
     log_info("server_shell", "forkpty execlp cmd='%s'", command);
@@ -382,12 +431,12 @@ static void start_shell_proc(const char *command) {
     child = forkpty(&sh_fd, NULL, NULL, NULL);
     if (child < 0) {
         log_error_errno("server_shell", "forkpty");
-        exit(1);
+        return -1;
     }
 
     // child process
     if (child == 0) {
-        log_info("server_shell", "execlp cmd='%s'", command);
+        log_info("server_shell", "execlp pid=%d cmd='%s'", (int)getpid(), command);
         execlp(command, command, NULL);
         log_error_errno("server_shell", "execlp='%s'", command);
         _exit(1);
@@ -396,24 +445,39 @@ static void start_shell_proc(const char *command) {
     // parent process
     pid = child;
     log_info("server_shell", "started pid=%d cmd='%s'", (int)pid, command);
+    return child;
 }
 
 // Проверяет, завершился ли процесс команды, и очищает ресурсы
-static void check_shell_termination(void) {
+static int check_shell_termination(server_ctx_t *ctx) {
     sig_atomic_t current_pid = pid; // Атомарное чтение
-    if (current_pid != -1) {
-        int status;
-        pid_t result = waitpid(current_pid, &status, WNOHANG);
-        if (result == current_pid) {
-            log_info("server_shell", "terminated pid=%d", current_pid);
-            if (sh_fd != -1) {
-                close(sh_fd);
-                sh_fd = -1;
-            }
-            pid = -1;
-            return;
-        }
+    if (current_pid == -1)
+        return 0;
+
+    int status;
+    pid_t result = waitpid(current_pid, &status, WNOHANG);
+    if (result != current_pid)
+        return 0;
+
+    int exit_code = -1;
+    int term_sig = 0;
+    if (WIFEXITED(status))
+        exit_code = WEXITSTATUS(status);
+    if (WIFSIGNALED(status))
+        term_sig = WTERMSIG(status);
+
+    log_info("server_shell", "terminated pid=%d exit=%d signal=%d",
+             current_pid, exit_code, term_sig);
+    server_send_tagged(ctx, "server_shell",
+                       "event=terminated pid=%d exit=%d signal=%d",
+                       (int)current_pid, exit_code, term_sig);
+
+    if (sh_fd != -1) {
+        close(sh_fd);
+        sh_fd = -1;
     }
+    pid = -1;
+    return 1;
 }
 
 static void terminate_shell_process(void) {
@@ -532,7 +596,11 @@ static int server_loop(server_ctx_t *ctx) {
             return -1;
         }
 
-        check_shell_termination();
+        if (check_shell_termination(ctx)) {
+            log_info("server_loop", "event=shell_finished exiting=1");
+            server_send_tagged(ctx, "server_shell", "event=server_exit");
+            break;
+        }
 
         int client_activity = 0;
 

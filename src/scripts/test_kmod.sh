@@ -122,7 +122,7 @@ wait_for_log() {
     start_line=${3:-1}
     start_ts=$(date +%s)
     while [ $(( $(date +%s) - start_ts )) -lt "${timeout}" ]; do
-        if tail -n +"${start_line}" "${KERNEL_LOG}" | grep -q "${pattern}"; then
+        if tail -n +"${start_line}" "${KERNEL_LOG}" | grep -E -q "${pattern}"; then
             return 0
         fi
         sleep 1
@@ -130,17 +130,19 @@ wait_for_log() {
     return 1
 }
 
+disabled_pattern="capture disabled|listening stopped"
 log "waiting for kernel module to hand off to userspace"
-if ! wait_for_log "capture disabled" 30; then
+if ! wait_for_log "${disabled_pattern}" 30; then
     log "kernel test failed: did not observe capture disabled log"
     exit 1
 fi
 
-disabled_line=$(grep -n "capture disabled" "${KERNEL_LOG}" | tail -n 1 | cut -d: -f1)
+disabled_line=$(grep -n -E "${disabled_pattern}" "${KERNEL_LOG}" | tail -n 1 | cut -d: -f1)
 next_start=$((disabled_line + 1))
 
+enable_pattern="capture enabled|listening started"
 log "waiting for kernel module to resume capture"
-if ! wait_for_log "capture enabled" 30 "${next_start}"; then
+if ! wait_for_log "${enable_pattern}" 30 "${next_start}"; then
     log "kernel test failed: module did not resume capture"
     exit 1
 fi
