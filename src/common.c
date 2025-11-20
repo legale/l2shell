@@ -20,27 +20,45 @@
 const u8 broadcast_mac[ETH_ALEN] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 int build_packet(pack_t *packet, size_t payload_size, const u8 src_mac[ETH_ALEN],
                  const u8 dst_mac[ETH_ALEN], u32 signature) {
+    size_t nonce_len = PACKET_NONCE_LEN;
+    size_t enc_payload_size;
+    u8 *nonce_ptr;
+    u8 *data_ptr;
+
     if (!packet || !src_mac || !dst_mac) return -1;
-    if (payload_size > MAX_PAYLOAD_SIZE) return -1;
+    if (payload_size + nonce_len > MAX_PAYLOAD_SIZE) return -1;
+
+    if (payload_size > 0)
+        memmove(packet->payload + nonce_len, packet->payload, payload_size);
 
     /* fill header */
     packet->header.eth_hdr.ether_type = htons(ETHER_TYPE_CUSTOM);
     memcpy(packet->header.eth_hdr.ether_shost, src_mac, ETH_ALEN);
     memcpy(packet->header.eth_hdr.ether_dhost, dst_mac, ETH_ALEN);
     packet->header.signature = htonl(signature);
-    packet->header.payload_size = htonl((u32)payload_size);
+    enc_payload_size = payload_size + nonce_len;
+    packet->header.payload_size = htonl((u32)enc_payload_size);
     packet->header.crc = 0;
+
+    nonce_ptr = packet->payload;
+    data_ptr = packet->payload + nonce_len;
+
+    hello_generate_nonce(nonce_ptr, nonce_len);
+    if (payload_size > 0) {
+        for (size_t i = 0; i < payload_size; i++)
+            data_ptr[i] ^= nonce_ptr[i & (nonce_len - 1)];
+    }
 
     /* encrypt first, using provisional key = 0 (stable step) */
     if (payload_size > 0) {
         /* key is final crc bytes; to make deterministic we do two-pass:
          * pass1: encrypt with zero key to stabilize plaintext-dependent crc
          */
-        enc_dec(packet->payload, packet->payload, zero_key, payload_size);
+        enc_dec(data_ptr, data_ptr, zero_key, payload_size);
     }
 
     /* crc over header(with crc=0) + encrypted payload */
-    size_t frame_len = sizeof(packh_t) + payload_size;
+    size_t frame_len = sizeof(packh_t) + enc_payload_size;
     u32 crc = csum32((const u8 *)packet, frame_len);
 
     /* write crc */
@@ -48,7 +66,7 @@ int build_packet(pack_t *packet, size_t payload_size, const u8 src_mac[ETH_ALEN]
 
     /* re-encrypt with final key so both sides share same rule */
     if (payload_size > 0) {
-        enc_dec(packet->payload, packet->payload, (const u8 *)&packet->header.crc, payload_size);
+        enc_dec(data_ptr, data_ptr, (const u8 *)&packet->header.crc, payload_size);
     }
 
     return (int)frame_len;
@@ -69,6 +87,8 @@ int parse_packet(pack_t *packet, ssize_t frame_len, u32 expected_signature) {
                   payload_size, MAX_PAYLOAD_SIZE);
         return -1;
     }
+    if (payload_size < PACKET_NONCE_LEN)
+        return -1;
 
     size_t expected_len = sizeof(packh_t) + payload_size;
     if (len < expected_len) {
@@ -80,8 +100,12 @@ int parse_packet(pack_t *packet, ssize_t frame_len, u32 expected_signature) {
     u32 crc_net = h->crc;
     u32 crc_host = ntohl(crc_net);
 
-    if (payload_size > 0)
-        enc_dec(packet->payload, packet->payload, (const u8 *)&crc_net, payload_size);
+    size_t data_len = payload_size - PACKET_NONCE_LEN;
+    u8 *nonce_ptr = packet->payload;
+    u8 *data_ptr = packet->payload + PACKET_NONCE_LEN;
+
+    if (data_len > 0)
+        enc_dec(data_ptr, data_ptr, (const u8 *)&crc_net, data_len);
 
     h->crc = 0;
     u32 crc_calc = csum32((const u8 *)packet, expected_len);
@@ -92,10 +116,16 @@ int parse_packet(pack_t *packet, ssize_t frame_len, u32 expected_signature) {
         return -1;
     }
 
-    if (payload_size > 0)
-        enc_dec(packet->payload, packet->payload, zero_key, payload_size);
+    if (data_len > 0)
+        enc_dec(data_ptr, data_ptr, zero_key, data_len);
 
-    return (int)payload_size;
+    for (size_t i = 0; i < data_len; i++)
+        data_ptr[i] ^= nonce_ptr[i & (PACKET_NONCE_LEN - 1)];
+
+    if (data_len > 0)
+        memmove(packet->payload, data_ptr, data_len);
+
+    return (int)data_len;
 }
 
 void debug_dump_frame(const char *prefix, const u8 *data, size_t len) {

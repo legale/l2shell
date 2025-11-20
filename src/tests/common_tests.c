@@ -130,7 +130,10 @@ static void test_build_and_parse_packet(void) {
     pack_t checksum_probe = {0};
     memcpy(&checksum_probe, &packet, (size_t)frame_len);
     if (payload_len > 0) {
-        enc_dec(checksum_probe.payload, checksum_probe.payload, (u8 *)&checksum_probe.header.crc, payload_len);
+        u8 *nonce_ptr = checksum_probe.payload;
+        u8 *data_ptr = checksum_probe.payload + PACKET_NONCE_LEN;
+        enc_dec(data_ptr, data_ptr, (u8 *)&checksum_probe.header.crc, payload_len);
+        (void)nonce_ptr;
     }
     checksum_probe.header.crc = 0;
     u32 expected_crc = csum32((const u8 *)&checksum_probe, (size_t)frame_len);
@@ -159,7 +162,7 @@ static void test_build_packet_preserves_padding(void) {
     int frame_len = build_packet(&packet, payload_len, src_mac, dst_mac, CLIENT_SIGNATURE);
     TEST_ASSERT(frame_len > 0);
 
-    TEST_ASSERT(packet.payload[payload_len] == (u8)0xAA);
+    TEST_ASSERT(packet.payload[PACKET_NONCE_LEN + payload_len] == (u8)0xAA);
     TEST_ASSERT(packet.payload[MAX_PAYLOAD_SIZE - 1] == (u8)0xAA);
     PRINT_TEST_PASSED();
 }
@@ -238,7 +241,7 @@ static void test_build_packet_rejects_large_payload(void) {
     u8 dst_mac[ETH_ALEN];
 
     test_set_macs(src_mac, dst_mac);
-    int rc = build_packet(&packet, MAX_PAYLOAD_SIZE + 1U, src_mac, dst_mac, CLIENT_SIGNATURE);
+    int rc = build_packet(&packet, MAX_DATA_SIZE + 1U, src_mac, dst_mac, CLIENT_SIGNATURE);
     TEST_ASSERT(rc < 0);
     PRINT_TEST_PASSED();
 }
@@ -307,20 +310,24 @@ static void test_build_packet_sets_fields(void) {
     memcpy(packet.payload, payload, payload_len);
 
     int frame_len = build_packet(&packet, payload_len, src_mac, dst_mac, CLIENT_SIGNATURE);
-    TEST_ASSERT(frame_len == (int)(sizeof(packh_t) + payload_len));
+    TEST_ASSERT(frame_len == (int)(sizeof(packh_t) + payload_len + PACKET_NONCE_LEN));
     TEST_ASSERT(ntohs(packet.header.eth_hdr.ether_type) == ETHER_TYPE_CUSTOM);
     TEST_ASSERT_MEMEQ(packet.header.eth_hdr.ether_shost, src_mac, ETH_ALEN);
     TEST_ASSERT_MEMEQ(packet.header.eth_hdr.ether_dhost, dst_mac, ETH_ALEN);
     TEST_ASSERT(ntohl(packet.header.signature) == (u32)CLIENT_SIGNATURE);
-    TEST_ASSERT(ntohl(packet.header.payload_size) == (u32)payload_len);
+    TEST_ASSERT(ntohl(packet.header.payload_size) == (u32)(payload_len + PACKET_NONCE_LEN));
 
     pack_t decrypted = packet;
-    enc_dec(decrypted.payload, decrypted.payload, (u8 *)&packet.header.crc, payload_len);
+    u8 *nonce_ptr = decrypted.payload;
+    u8 *data_ptr = decrypted.payload + PACKET_NONCE_LEN;
+    enc_dec(data_ptr, data_ptr, (u8 *)&packet.header.crc, payload_len);
     if (payload_len > 0) {
         u32 zero_key = 0;
-        enc_dec(decrypted.payload, decrypted.payload, (u8 *)&zero_key, payload_len);
+        enc_dec(data_ptr, data_ptr, (u8 *)&zero_key, payload_len);
+        for (size_t i = 0; i < payload_len; i++)
+            data_ptr[i] ^= nonce_ptr[i & (PACKET_NONCE_LEN - 1)];
     }
-    TEST_ASSERT_MEMEQ(decrypted.payload, payload, payload_len);
+    TEST_ASSERT_MEMEQ(data_ptr, payload, payload_len);
     PRINT_TEST_PASSED();
 }
 

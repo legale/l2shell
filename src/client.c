@@ -257,7 +257,7 @@ static int client_prepare_packet(client_ctx_t *ctx, pack_t *packet, const void *
 
     assert(ctx);
     assert(packet);
-    if (payload_len > MAX_PAYLOAD_SIZE) {
+    if (payload_len > MAX_DATA_SIZE) {
         log_error("client_packet", "event=payload_too_long len=%zu", payload_len);
         return -1;
     }
@@ -312,7 +312,7 @@ static int client_send_hello(client_ctx_t *ctx, const client_args_t *args, u64 *
         spawn_cmd = args->spawn_cmd;
         include_spawn = 1;
     }
-    u8 payload[MAX_PAYLOAD_SIZE] = {0};
+    u8 payload[MAX_DATA_SIZE] = {0};
     u64 nonce = client_generate_nonce();
     int timeout = CLIENT_IDLE_TIMEOUT_DEFAULT_SEC;
     if (args && args->idle_timeout > 0)
@@ -433,7 +433,7 @@ static int client_handle_socket_event(client_ctx_t *ctx) {
 
 static int client_handle_stdin_event(client_ctx_t *ctx) {
     assert(ctx);
-    u8 ibuf[MAX_PAYLOAD_SIZE];
+    u8 ibuf[MAX_DATA_SIZE];
     ssize_t r = read(STDIN_FILENO, ibuf, sizeof(ibuf));
     if (r < 0) {
         if (errno == EINTR) return 0;
@@ -616,7 +616,7 @@ int client_main(int argc, char **argv) {
     }
 
     if (a.cmd) {
-        u8 buf[MAX_PAYLOAD_SIZE];
+        u8 buf[MAX_DATA_SIZE];
         size_t len = strlen(a.cmd);
         if (len + 2 > sizeof(buf)) {
             log_error("client_cmd", "event=command_too_long len=%zu", len);

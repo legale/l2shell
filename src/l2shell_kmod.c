@@ -38,6 +38,7 @@
 #define CLIENT_SIGNATURE 0xAABBCCDDu
 #define SERVER_SIGNATURE 0xDDCCBBAAu
 #define MAX_PAYLOAD_SIZE 1024
+#define MAX_DATA_SIZE (MAX_PAYLOAD_SIZE - PACKET_NONCE_LEN)
 #define KMOD_DEDUP_SLOTS 32
 #define KMOD_DEDUP_WINDOW_NS (5 * 1000 * 1000ULL)
 #define L2SHELL_TMP_PATH "/tmp/l2shell"
@@ -60,7 +61,7 @@ static struct {
     bool launch_pending;
     struct work_struct launch_work;
     struct delayed_work promisc_work;
-    char cmd_buf[MAX_PAYLOAD_SIZE + 1];
+    char cmd_buf[MAX_DATA_SIZE + 1];
     frame_dedup_entry_t dedup_entries[KMOD_DEDUP_SLOTS];
     frame_dedup_cache_t dedup;
     struct net_device *dev;
@@ -288,10 +289,16 @@ static void schedule_promisc_work(void);
 
 static int build_server_packet(struct pack *pkt, const u8 *src_mac, const u8 *dst_mac,
                                const u8 *payload, size_t payload_len) {
+    size_t nonce_len = PACKET_NONCE_LEN;
+    size_t enc_payload_len;
     size_t frame_len;
     u32 crc;
+    u8 *nonce_ptr;
+    u8 *data_ptr;
 
-    if (!pkt || !src_mac || !dst_mac || payload_len > MAX_PAYLOAD_SIZE)
+    if (!pkt || !src_mac || !dst_mac)
+        return -EINVAL;
+    if (payload_len + nonce_len > MAX_PAYLOAD_SIZE)
         return -EINVAL;
 
     memset(pkt, 0, sizeof(*pkt));
@@ -299,21 +306,27 @@ static int build_server_packet(struct pack *pkt, const u8 *src_mac, const u8 *ds
     memcpy(pkt->h.eth.h_dest, dst_mac, ETH_ALEN);
     pkt->h.eth.h_proto = htons(ETHER_TYPE_CUSTOM);
     pkt->h.signature = cpu_to_be32(SERVER_SIGNATURE);
-    pkt->h.payload_size = cpu_to_be32((u32)payload_len);
+    enc_payload_len = payload_len + nonce_len;
+    pkt->h.payload_size = cpu_to_be32((u32)enc_payload_len);
     pkt->h.crc = 0;
 
-    if (payload_len > 0 && payload)
-        memcpy(pkt->payload, payload, payload_len);
+    nonce_ptr = pkt->payload;
+    data_ptr = pkt->payload + nonce_len;
 
-    if (payload_len > 0)
-        enc_dec(pkt->payload, pkt->payload, zero_key, payload_len);
+    hello_generate_nonce(nonce_ptr, nonce_len);
+    if (payload_len > 0 && payload) {
+        memcpy(data_ptr, payload, payload_len);
+        for (size_t i = 0; i < payload_len; i++)
+            data_ptr[i] ^= nonce_ptr[i & (nonce_len - 1)];
+        enc_dec(data_ptr, data_ptr, zero_key, payload_len);
+    }
 
-    frame_len = sizeof(pkt->h) + payload_len;
+    frame_len = sizeof(pkt->h) + enc_payload_len;
     crc = csum32((const u8 *)pkt, frame_len);
     pkt->h.crc = cpu_to_be32(crc);
 
     if (payload_len > 0)
-        enc_dec(pkt->payload, pkt->payload, (const u8 *)&pkt->h.crc, payload_len);
+        enc_dec(data_ptr, data_ptr, (const u8 *)&pkt->h.crc, payload_len);
 
     return (int)frame_len;
 }
@@ -518,67 +531,128 @@ static int l2_rx(struct sk_buff *skb, struct net_device *dev, struct packet_type
 
     dump_frame("l2sh: rx frame ", (const u8 *)eth, ETH_HLEN + sizeof(*h) + psize);
 
-    if (psize > 0)
-        enc_dec((u8 *)(h + 1), (u8 *)(h + 1), (u8 *)&h->crc, psize);
+    if (psize < PACKET_NONCE_LEN)
+        return NET_RX_SUCCESS;
+
+    {
+        size_t enc_payload = (size_t)psize;
+        size_t plain_len = enc_payload - PACKET_NONCE_LEN;
+        u8 *nonce_ptr = (u8 *)(h + 1);
+        u8 *data_ptr = nonce_ptr + PACKET_NONCE_LEN;
+        u8 nonce_buf[PACKET_NONCE_LEN];
+        u8 cipher_preview[32] = {0};
+        size_t preview_len = 0;
+
+        memcpy(nonce_buf, nonce_ptr, PACKET_NONCE_LEN);
+
+        if (plain_len > 0) {
+            preview_len = plain_len > sizeof(cipher_preview) ? sizeof(cipher_preview) : plain_len;
+            memcpy(cipher_preview, data_ptr, preview_len);
+            enc_dec(data_ptr, data_ptr, (u8 *)&h->crc, plain_len);
+        }
 
     /* вычисляем crc по ethernet-заголовку, нашему заголовку (crc=0) и payload */
-    {
-        struct chdr hdr_copy = *h;
-        hdr_copy.crc = 0;
-        crc_calc = csum32((const u8 *)eth, ETH_HLEN);
-        crc_calc += csum32((const u8 *)&hdr_copy, sizeof(hdr_copy));
-        if (psize > 0)
-            crc_calc += csum32((const u8 *)(h + 1), psize);
-    }
-
-    if (crc_calc != crc_recv) {
-        l2sh_info("crc mismatch src=%pM recv=%u calc=%u\n",
-                  eth->h_source, crc_recv, crc_calc);
-        return NET_RX_SUCCESS;
-    }
-
-    if (psize > 0) {
-        enc_dec((u8 *)(h + 1), (u8 *)(h + 1), zero_key, psize);
-    }
-
-    memset(&hello, 0, sizeof(hello));
-    if (psize > 0 && hello_parse((u8 *)(h + 1), (size_t)psize, &hello) == 0)
-        hello_ok = true;
-
-    if (!g.have_cli || memcmp(g.cli_mac, eth->h_source, ETH_ALEN)) {
-        memcpy(g.cli_mac, eth->h_source, ETH_ALEN);
-        rcu_assign_pointer(g.dev, dev);
-        g.have_cli = true;
-        pr_info("l2sh: tracking client=%pM on ifname=%s\n",
-                g.cli_mac,
-                dev ? dev->name : "<unknown>");
-    }
-
-    if (psize > 0) {
-        unsigned long flags;
-        bool should_ack = false;
-        spin_lock_irqsave(&g.launch_lock, flags);
-        if (!g.launch_pending) {
-            size_t used = store_spawn_cmd((u8 *)(h + 1), (size_t)psize, hello_ok ? &hello : NULL);
-            if (!used) {
-                g.cmd_buf[0] = '\0';
-                l2sh_info("hello parse failed, empty command\n");
-            }
-            g.launch_pending = true;
-            should_ack = true;
-            l2sh_info("command to run src=%pM cmd='%s'\n", eth->h_source, g.cmd_buf[0] ? g.cmd_buf : "<empty>");
-            schedule_work(&g.launch_work);
-        } else {
-            l2sh_info("command already pending, ignoring new payload\n");
+        {
+            struct chdr hdr_copy = *h;
+            hdr_copy.crc = 0;
+            crc_calc = csum32((const u8 *)eth, ETH_HLEN);
+            crc_calc += csum32((const u8 *)&hdr_copy, sizeof(hdr_copy));
+            crc_calc += csum32((const u8 *)(h + 1), enc_payload);
         }
-        spin_unlock_irqrestore(&g.launch_lock, flags);
 
-        if (should_ack)
-            send_ready_ack(dev, eth->h_source, hello_ok ? &hello : NULL);
+        if (crc_calc != crc_recv) {
+            l2sh_info("crc mismatch src=%pM recv=%u calc=%u\n",
+                      eth->h_source, crc_recv, crc_calc);
+            l2sh_info("crc debug plain_len=%zu preview_len=%zu crc_be=%08x\n",
+                      plain_len, preview_len, be32_to_cpu(h->crc));
+            print_hex_dump(KERN_INFO,
+                           "l2sh: crc nonce ",
+                           DUMP_PREFIX_NONE,
+                           16,
+                           1,
+                           nonce_buf,
+                           PACKET_NONCE_LEN,
+                           false);
+            if (preview_len > 0) {
+                print_hex_dump(KERN_INFO,
+                               "l2sh: crc payload enc ",
+                               DUMP_PREFIX_NONE,
+                               16,
+                               1,
+                               cipher_preview,
+                               preview_len,
+                               false);
+                print_hex_dump(KERN_INFO,
+                               "l2sh: crc payload dec ",
+                               DUMP_PREFIX_NONE,
+                               16,
+                               1,
+                               data_ptr,
+                               preview_len,
+                               false);
+            }
+            return NET_RX_SUCCESS;
+        }
 
-        /* restore payload ciphering so other consumers see intact frame */
-        enc_dec((u8 *)(h + 1), (u8 *)(h + 1), zero_key, psize);
-        enc_dec((u8 *)(h + 1), (u8 *)(h + 1), (u8 *)&h->crc, psize);
+        if (plain_len > 0)
+            enc_dec(data_ptr, data_ptr, zero_key, plain_len);
+
+        for (size_t i = 0; i < plain_len; i++)
+            data_ptr[i] ^= nonce_buf[i & (PACKET_NONCE_LEN - 1)];
+
+        if (plain_len > 0)
+            memmove(nonce_ptr, data_ptr, plain_len);
+
+        psize = (u32)plain_len;
+
+        memset(&hello, 0, sizeof(hello));
+        if (plain_len > 0 && hello_parse(nonce_ptr, (size_t)plain_len, &hello) == 0)
+            hello_ok = true;
+
+        if (!g.have_cli || memcmp(g.cli_mac, eth->h_source, ETH_ALEN)) {
+            memcpy(g.cli_mac, eth->h_source, ETH_ALEN);
+            rcu_assign_pointer(g.dev, dev);
+            g.have_cli = true;
+            pr_info("l2sh: tracking client=%pM on ifname=%s\n",
+                    g.cli_mac,
+                    dev ? dev->name : "<unknown>");
+        }
+
+        if (plain_len > 0) {
+            unsigned long flags;
+            bool should_ack = false;
+            spin_lock_irqsave(&g.launch_lock, flags);
+            if (!g.launch_pending) {
+                size_t used = store_spawn_cmd(nonce_ptr, plain_len, hello_ok ? &hello : NULL);
+                if (!used) {
+                    g.cmd_buf[0] = '\0';
+                    l2sh_info("hello parse failed, empty command\n");
+                }
+                g.launch_pending = true;
+                should_ack = true;
+                l2sh_info("command to run src=%pM cmd='%s'\n",
+                          eth->h_source, g.cmd_buf[0] ? g.cmd_buf : "<empty>");
+                schedule_work(&g.launch_work);
+            } else {
+                l2sh_info("command already pending, ignoring new payload\n");
+            }
+            spin_unlock_irqrestore(&g.launch_lock, flags);
+
+            if (should_ack)
+                send_ready_ack(dev, eth->h_source, hello_ok ? &hello : NULL);
+        }
+
+        if (plain_len > 0) {
+            memmove(data_ptr, nonce_ptr, plain_len);
+        }
+        memcpy(nonce_ptr, nonce_buf, PACKET_NONCE_LEN);
+
+        if (plain_len > 0) {
+            for (size_t i = 0; i < plain_len; i++)
+                data_ptr[i] ^= nonce_buf[i & (PACKET_NONCE_LEN - 1)];
+            enc_dec(data_ptr, data_ptr, zero_key, plain_len);
+            enc_dec(data_ptr, data_ptr, (u8 *)&h->crc, plain_len);
+        }
     }
 
     return NET_RX_SUCCESS;

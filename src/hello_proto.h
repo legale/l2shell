@@ -4,12 +4,18 @@
 #define HELLO_PROTO_H
 
 #ifdef __KERNEL__
+#include <linux/ktime.h>
+#include <linux/random.h>
+#include <linux/sched.h>
 #include <linux/string.h>
 #include <linux/types.h>
 #else
 #include "intshort.h"
 #include <stddef.h>
+#include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <unistd.h>
 #endif
 
 #define HELLO_VERSION 0x01
@@ -17,6 +23,7 @@
 #define HELLO_T_SHELL 0x02
 #define HELLO_T_NONCE 0x03
 #define HELLO_T_IDLE_TIMEOUT 0x04
+#define PACKET_NONCE_LEN 16
 
 typedef struct hello_view {
     const u8 *server_bin_path;
@@ -167,6 +174,39 @@ static inline int hello_parse(const u8 *buf, size_t buf_len, hello_view_t *view)
 static const u8 hello_key_magic[4] = {4, 1, 2, 3};
 static const u8 hello_zero_key[4] = {0, 0, 0, 0};
 #define zero_key hello_zero_key
+
+static inline u64 hello_nonce_seed(void) {
+#ifdef __KERNEL__
+    u32 rnd = get_random_u32();
+    u64 ns = (u64)ktime_get_ns();
+    return ns ^ ((u64)rnd << 32) ^ (u64)rnd ^ (u64)current->pid;
+#else
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    u64 mix = ((u64)ts.tv_sec << 32) ^ (u64)ts.tv_nsec;
+    mix ^= (u64)getpid();
+    mix ^= (u64)rand();
+    return mix;
+#endif
+}
+
+static inline void hello_generate_nonce(u8 *nonce, size_t len) {
+    static u64 hello_nonce_counter;
+    u64 state;
+    size_t i = 0;
+
+    if (!nonce || len == 0)
+        return;
+
+    state = hello_nonce_seed() ^ (++hello_nonce_counter);
+    while (i < len) {
+        size_t chunk = len - i < sizeof(state) ? len - i : sizeof(state);
+        u64 mixed = state ^ (state >> 12) ^ (state << 25);
+        memcpy(nonce + i, &mixed, chunk);
+        state = (state * 6364136223846793005ULL) + 1ULL + hello_nonce_seed();
+        i += chunk;
+    }
+}
 
 static inline void enc_dec(const u8 *input, u8 *output, const u8 *key, size_t len) {
     uint32_t s;
