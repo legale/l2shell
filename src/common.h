@@ -3,6 +3,7 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+#include "proto.h"
 #include "hello_proto.h"
 #include "intshort.h"
 
@@ -27,12 +28,6 @@
 #define COMPACT_MACSTR "%02x%02x%02x%02x%02x%02x"
 #endif
 
-#define CLIENT_SIGNATURE 0xAABBCCDD
-#define SERVER_SIGNATURE 0xDDCCBBAA
-#define SIGNATURE_LEN 4
-#define MAX_PAYLOAD_SIZE 1024
-#define MAX_DATA_SIZE (MAX_PAYLOAD_SIZE - PACKET_NONCE_LEN)
-#define ETHER_TYPE_CUSTOM 0x88B5
 // unit conversion macros
 #ifndef NSEC_PER_USEC
 #define NSEC_PER_USEC 1000U
@@ -59,22 +54,6 @@
 #endif
 
 extern const u8 broadcast_mac[ETH_ALEN];
-
-typedef struct my_packet_header {
-    struct ether_header eth_hdr;
-    u32 signature;
-    u32 payload_size;
-    u32 crc;
-} __attribute__((packed)) packh_t;
-
-typedef struct my_packet {
-    packh_t header;
-    u8 payload[MAX_PAYLOAD_SIZE];
-} __attribute__((packed)) pack_t;
-
-void enc_dec(const u8 *input, u8 *output, const u8 *key, size_t len);
-int build_packet(pack_t *packet, size_t payload_size, const u8 src_mac[ETH_ALEN], const u8 dst_mac[ETH_ALEN], u32 signature);
-int parse_packet(pack_t *packet, ssize_t frame_len, u32 expected_signature);
 
 void debug_dump_frame(const char *prefix, const u8 *data, size_t len);
 int init_packet_socket(int *sockfd, struct ifreq *ifr, struct sockaddr_ll *bind_addr, const char *iface, int bind_to_device);

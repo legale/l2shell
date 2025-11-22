@@ -14,7 +14,7 @@ BIN2C_SRC := tools/bin2c.c tools/lz4.c
 SRC_MAIN := l2shell_main.c
 SRC_SERVER := server.c
 SRC_CLIENT := client.c
-SRC_COMMON := common.c
+SRC_COMMON := common.c proto.c
 SRC_ALL := $(SRC_MAIN) $(SRC_SERVER) $(SRC_CLIENT) $(SRC_COMMON)
 
 CPPFLAGS += -DLINUX -D_GNU_SOURCE -D__USE_MISC -I. -Itests
@@ -74,7 +74,7 @@ $(BIN2C): $(BIN2C_SRC)
 $(EMBED_HEADER): $(BIN_MAIN) $(BIN2C)
 	./$(BIN2C) $(BIN_MAIN) $@
 
-$(COMMON_TEST_BIN): tests/common_tests.c common.c | tests/test_common_shared.h test_util.h common.h
+$(COMMON_TEST_BIN): tests/common_tests.c common.c proto.c | tests/test_common_shared.h test_util.h common.h proto.h
 	$(CC) $(CPPFLAGS) $(DBG_CFLAGS) $^ -o $@ $(TEST_LDLIBS)
 
 clean:
