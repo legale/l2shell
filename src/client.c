@@ -279,7 +279,7 @@ static int client_send_nonce_confirm(client_ctx_t *ctx, u64 nonce) {
 }
 
 static int client_send_hello(client_ctx_t *ctx, const client_args_t *args, u64 *nonce_out) {
-    const char *shell_cmd = (args && args->shell) ? args->shell : "sh";
+    const char *shell_cmd = (args && args->shell) ? args->shell : NULL;
     const char *spawn_cmd = NULL;
     int include_spawn = 0;
     if (args && args->spawn_cmd && args->spawn_cmd[0] != '\0') {
@@ -581,6 +581,7 @@ int client_main(int argc, char **argv) {
     if (a.cmd) {
         u8 buf[MAX_DATA_SIZE];
         size_t len = strlen(a.cmd);
+        
         if (len + 2 > sizeof(buf)) {
             log_error("client_cmd", "event=command_too_long len=%zu", len);
             client_ctx_deinit(&ctx);

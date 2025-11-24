@@ -16,13 +16,13 @@
 #include <assert.h>
 #include <ctype.h> // isspace
 #include <errno.h> //EINTR MACRO
-#include <stdarg.h>
 #include <fcntl.h> // Для функции fcntl
 #include <net/if.h>
 #include <netinet/ether.h>
 #include <netpacket/packet.h>
 #include <pty.h>
 #include <signal.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -32,6 +32,7 @@
 #include <time.h> //difftime
 #include <unistd.h>
 
+#define L2SHELL_DEFAULT_CMD "bash"
 #define SERVER_IDLE_TIMEOUT_DEFAULT_SEC 30
 #define SERVER_IDLE_TIMEOUT_MAX_SEC 600
 #define DELAY_SEC 1
@@ -260,14 +261,11 @@ static int server_cmd_exec_handler(server_ctx_t *ctx, pack_t *packet, int payloa
         }
     }
 
-    const u8 *cmd = packet->payload;
-    size_t cmd_sz = (size_t)payload_size;
-    if (cmd_sz == 0 || (cmd_sz > 0 && isspace(cmd[0]))) {
-        static const u8 default_cmd[] = "sh";
-        cmd = default_cmd;
-        cmd_sz = sizeof(default_cmd) - 1;
-    }
-    if (server_exec(ctx, cmd, cmd_sz) != 0) {
+    const u8 *cmd = (u8 *)L2SHELL_DEFAULT_CMD;
+    size_t cmd_len = sizeof(L2SHELL_DEFAULT_CMD) - 1;
+
+    log_info("server_launch_default", "%s", cmd);
+    if (server_exec(ctx, cmd, cmd_len) != 0) {
         log_error("server_launch", "event=launch_failed");
     }
     return payload_size;
@@ -333,7 +331,7 @@ static int server_exec(server_ctx_t *ctx, const u8 *payload, size_t payload_size
         log_error("server_launch", "event=empty_payload");
         return -1;
     }
-static char command_buf[MAX_DATA_SIZE + 1];
+    static char command_buf[MAX_DATA_SIZE + 1];
     if (payload_size > sizeof(command_buf) - 1) {
         log_error("server_launch", "event=payload_overflow len=%zu", payload_size);
         return -1;
