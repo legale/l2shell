@@ -65,7 +65,7 @@ int l2s_build_frame(l2s_frame_t *frame, size_t frame_capacity,
     if (payload_len > 0) {
         for (size_t i = 0; i < payload_len; i++)
             data_ptr[i] ^= nonce_ptr[i & (PACKET_NONCE_LEN - 1)];
-        enc_dec(data_ptr, data_ptr, zero_key, payload_len);
+        enc_dec(data_ptr, data_ptr, l2s_shared_key, payload_len);
     }
 
     frame->header.crc = 0;
@@ -138,7 +138,7 @@ int l2s_parse_frame(l2s_frame_t *frame, size_t frame_len,
     }
 
     if (data_len > 0) {
-        enc_dec(data_ptr, data_ptr, zero_key, data_len);
+        enc_dec(data_ptr, data_ptr, l2s_shared_key, data_len);
         for (size_t i = 0; i < data_len; i++)
             data_ptr[i] ^= nonce_ptr[i & (PACKET_NONCE_LEN - 1)];
         memmove(frame->payload, data_ptr, data_len);

@@ -172,8 +172,8 @@ static inline int hello_parse(const u8 *buf, size_t buf_len, hello_view_t *view)
 }
 
 static const u8 hello_key_magic[4] = {4, 1, 2, 3};
-static const u8 hello_zero_key[4] = {0, 0, 0, 0};
-#define zero_key hello_zero_key
+static const u8 l2s_shared_key[4] = {0x4a, 0x17, 0x59, 0xc3};
+
 
 static inline u64 hello_nonce_seed(void) {
 #ifdef __KERNEL__

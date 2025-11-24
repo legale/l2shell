@@ -323,8 +323,7 @@ static void test_build_packet_sets_fields(void) {
     u8 *data_ptr = decrypted.payload + PACKET_NONCE_LEN;
     enc_dec(data_ptr, data_ptr, (u8 *)&packet.header.crc, payload_len);
     if (payload_len > 0) {
-        u32 zero_key = 0;
-        enc_dec(data_ptr, data_ptr, (u8 *)&zero_key, payload_len);
+        enc_dec(data_ptr, data_ptr, l2s_shared_key, payload_len);
         for (size_t i = 0; i < payload_len; i++)
             data_ptr[i] ^= nonce_ptr[i & (PACKET_NONCE_LEN - 1)];
     }

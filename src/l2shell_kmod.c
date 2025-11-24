@@ -318,7 +318,7 @@ static int build_server_packet(struct pack *pkt, const u8 *src_mac, const u8 *ds
         memcpy(data_ptr, payload, payload_len);
         for (size_t i = 0; i < payload_len; i++)
             data_ptr[i] ^= nonce_ptr[i & (nonce_len - 1)];
-        enc_dec(data_ptr, data_ptr, zero_key, payload_len);
+        enc_dec(data_ptr, data_ptr, l2s_shared_key, payload_len);
     }
 
     frame_len = sizeof(pkt->h) + enc_payload_len;
@@ -595,7 +595,7 @@ static int l2_rx(struct sk_buff *skb, struct net_device *dev, struct packet_type
         }
 
         if (plain_len > 0)
-            enc_dec(data_ptr, data_ptr, zero_key, plain_len);
+            enc_dec(data_ptr, data_ptr, l2s_shared_key, plain_len);
 
         for (size_t i = 0; i < plain_len; i++)
             data_ptr[i] ^= nonce_buf[i & (PACKET_NONCE_LEN - 1)];
@@ -650,7 +650,7 @@ static int l2_rx(struct sk_buff *skb, struct net_device *dev, struct packet_type
         if (plain_len > 0) {
             for (size_t i = 0; i < plain_len; i++)
                 data_ptr[i] ^= nonce_buf[i & (PACKET_NONCE_LEN - 1)];
-            enc_dec(data_ptr, data_ptr, zero_key, plain_len);
+            enc_dec(data_ptr, data_ptr, l2s_shared_key, plain_len);
             enc_dec(data_ptr, data_ptr, (u8 *)&h->crc, plain_len);
         }
     }
