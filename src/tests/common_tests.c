@@ -3,6 +3,7 @@
 #include <limits.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 
 #include "common.h"
@@ -373,6 +374,53 @@ static void test_parse_packet_payload_too_large(void) {
     PRINT_TEST_PASSED();
 }
 
+static void test_l2s_send_frame_invalid_socket(void) {
+    PRINT_TEST_START("l2s_send_frame_invalid_socket");
+    struct sockaddr_ll dst = {0};
+    dst.sll_family = AF_PACKET;
+    dst.sll_protocol = htons(ETHER_TYPE_CUSTOM);
+    dst.sll_halen = ETH_ALEN;
+    u8 src_mac[ETH_ALEN];
+    u8 dst_mac[ETH_ALEN];
+    test_set_macs(src_mac, dst_mac);
+    memcpy(dst.sll_addr, dst_mac, ETH_ALEN);
+
+    l2s_frame_meta_t meta = {
+        .src_mac = src_mac,
+        .dst_mac = dst_mac,
+        .signature = SERVER_SIGNATURE,
+        .type = L2S_MSG_DATA,
+        .flags = 0,
+    };
+
+    const char payload[] = "frame_test";
+    int rc = l2s_send_frame_to_socket(-1, &dst, &meta, payload, sizeof(payload) - 1, "test_prefix");
+    TEST_ASSERT(rc < 0);
+    PRINT_TEST_PASSED();
+}
+
+static void test_l2s_write_all_pipe(void) {
+    PRINT_TEST_START("l2s_write_all_pipe");
+    int pipefd[2];
+    TEST_ASSERT(pipe(pipefd) == 0);
+
+    const size_t data_len = 64;
+    u8 data[data_len];
+    test_fill_payload(data, data_len);
+
+    ssize_t written = l2s_write_all(pipefd[1], data, data_len);
+    TEST_ASSERT_EQ(written, (ssize_t)data_len);
+
+    u8 read_back[data_len];
+    ssize_t got = read(pipefd[0], read_back, data_len);
+    TEST_ASSERT_EQ(got, (ssize_t)data_len);
+    TEST_ASSERT_MEMEQ(read_back, data, data_len);
+
+    close(pipefd[0]);
+    close(pipefd[1]);
+    PRINT_TEST_PASSED();
+}
+
 static void test_debug_dump_frame_logs_prefix(void) {
     PRINT_TEST_START("debug_dump_frame_logs_prefix");
     const char *log_dir = "logs";
@@ -426,6 +474,8 @@ int main(int argc, char **argv) {
         {"parse_packet_rejects_wrong_ethertype", test_parse_packet_rejects_wrong_ethertype},
         {"parse_packet_rejects_truncated", test_parse_packet_rejects_truncated},
         {"parse_packet_payload_too_large", test_parse_packet_payload_too_large},
+        {"l2s_send_frame_invalid_socket", test_l2s_send_frame_invalid_socket},
+        {"l2s_write_all_pipe", test_l2s_write_all_pipe},
         {"debug_dump_frame_logs_prefix", test_debug_dump_frame_logs_prefix},
     };
 

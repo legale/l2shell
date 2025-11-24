@@ -183,3 +183,46 @@ void deinit_packet_socket(int *sockfd) {
     close(*sockfd);
     *sockfd = -1;
 }
+
+int l2s_send_frame_to_socket(int sockfd, const struct sockaddr_ll *dst,
+                             const l2s_frame_meta_t *meta, const void *payload,
+                             size_t payload_len, const char *debug_prefix) {
+    if (sockfd < 0 || !dst || !meta)
+        return -1;
+
+    pack_t packet = {0};
+    int frame_len = l2s_build_frame(&packet, sizeof(packet), meta, payload, payload_len);
+    if (frame_len < 0)
+        return frame_len;
+
+    if (debug_prefix)
+        debug_dump_frame(debug_prefix, (const u8 *)&packet, (size_t)frame_len);
+
+    ssize_t sent = sendto(sockfd, &packet, (size_t)frame_len, 0,
+                          (const struct sockaddr *)dst, sizeof(*dst));
+    if (sent < 0 || (size_t)sent != (size_t)frame_len)
+        return -1;
+
+    return frame_len;
+}
+
+ssize_t l2s_write_all(int fd, const void *buf, size_t count) {
+    const char *ptr = (const char *)buf;
+    size_t remaining = count;
+    ssize_t written = 0;
+
+    while (remaining > 0) {
+        written = write(fd, ptr, remaining);
+        if (written < 0) {
+            if (errno == EINTR)
+                continue;
+            return -1;
+        }
+        if (written == 0)
+            return (ssize_t)(count - remaining);
+        ptr += written;
+        remaining -= (size_t)written;
+    }
+
+    return (ssize_t)count;
+}

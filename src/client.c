@@ -212,6 +212,7 @@ static int client_recv_packet(client_ctx_t *ctx, pack_t *pack, int *payload_len)
     struct sockaddr_ll peer;
     socklen_t plen = sizeof(peer);
     ssize_t got;
+    size_t parsed_len = 0;
 
     assert(ctx);
     assert(pack);
@@ -228,15 +229,14 @@ static int client_recv_packet(client_ctx_t *ctx, pack_t *pack, int *payload_len)
     if (peer.sll_ifindex != ctx->bind_addr.sll_ifindex)
         return 0;
 
-    debug_dump_frame("client_rx frame ", (const u8 *)pack, got);
-
-    int psz = parse_packet(pack, got, SERVER_SIGNATURE);
-    if (psz <= 0)
+    int rc = l2s_parse_frame(pack, (size_t)got, SERVER_SIGNATURE, &parsed_len);
+    if (rc != L2S_FRAME_OK)
         return 0;
     if (memcmp(pack->header.eth_hdr.ether_shost, ctx->server_mac, ETH_ALEN) != 0)
         return 0;
+    debug_dump_frame("client_rx frame ", (const u8 *)pack, got);
     if (payload_len)
-        *payload_len = psz;
+        *payload_len = (int)parsed_len;
     return 1;
 }
 
@@ -251,47 +251,21 @@ static int recv_once_and_print(client_ctx_t *ctx) {
     return 1;
 }
 
-static int client_prepare_packet(client_ctx_t *ctx, pack_t *packet, const void *payload, size_t payload_len) {
-    u8 src_mac[ETH_ALEN];
-    int frame_len;
-
-    assert(ctx);
-    assert(packet);
-    if (payload_len > MAX_DATA_SIZE) {
-        log_error("client_packet", "event=payload_too_long len=%zu", payload_len);
-        return -1;
-    }
-
-    memset(packet, 0, sizeof(*packet));
-    if (payload && payload_len)
-        memcpy(packet->payload, payload, payload_len);
-
-    memcpy(src_mac, ctx->ifr.ifr_hwaddr.sa_data, ETH_ALEN);
-    frame_len = build_packet(packet, payload_len, src_mac, ctx->server_mac, CLIENT_SIGNATURE);
+/* tx frame */
+static int client_send_payload(client_ctx_t *ctx, const void *payload, size_t payload_len) {
+    l2s_frame_meta_t meta = {
+        .src_mac = (u8 *)ctx->ifr.ifr_hwaddr.sa_data,
+        .dst_mac = ctx->server_mac,
+        .signature = CLIENT_SIGNATURE,
+        .type = L2S_MSG_DATA,
+        .flags = 0,
+    };
+    int frame_len = l2s_send_frame_to_socket(ctx->sockfd, &ctx->saddr, &meta, payload, payload_len, "client_tx frame ");
     if (frame_len < 0) {
-        log_error("client_packet", "event=build_packet_failed");
-        return -1;
-    }
-    return frame_len;
-}
-
-static int client_flush_packet(client_ctx_t *ctx, const pack_t *packet, size_t frame_len) {
-    assert(ctx);
-    assert(packet);
-    debug_dump_frame("client_tx frame ", (const u8 *)packet, frame_len);
-    if (sendto(ctx->sockfd, packet, frame_len, 0, (struct sockaddr *)&ctx->saddr, sizeof(ctx->saddr)) < 0) {
-        log_error_errno("client_send", "sendto");
+        log_error_errno("client_send", "event=sendto");
         return -1;
     }
     return 0;
-}
-
-/* tx frame */
-static int client_send_payload(client_ctx_t *ctx, const void *payload, size_t payload_len) {
-    pack_t packet;
-    int frame_len = client_prepare_packet(ctx, &packet, payload, payload_len);
-    if (frame_len < 0) return -1;
-    return client_flush_packet(ctx, &packet, (size_t)frame_len);
 }
 
 static int client_send_nonce_confirm(client_ctx_t *ctx, u64 nonce) {
@@ -336,19 +310,18 @@ static int client_send_hello(client_ctx_t *ctx, const client_args_t *args, u64 *
     return client_send_payload(ctx, payload, (size_t)hello_len);
 }
 
-static int client_wait_ready(client_ctx_t *ctx, u64 expected_nonce, u64 timeout_ns) {
-    u64 deadline = mono_ns() + timeout_ns;
-    pack_t pack;
-
+static int client_wait_socket_ready(client_ctx_t *ctx, u64 deadline_ns, const char *log_tag) {
+    assert(ctx);
     while (1) {
         u64 now = mono_ns();
-        if (now >= deadline)
-            return 1;
+        if (now >= deadline_ns)
+            return 0;
 
-        u64 rem = deadline - now;
-        struct timeval tv;
-        tv.tv_sec = (time_t)(rem / NSEC_PER_SEC);
-        tv.tv_usec = (suseconds_t)((rem % NSEC_PER_SEC) / NSEC_PER_USEC);
+        u64 rem = deadline_ns - now;
+        struct timeval tv = {
+            .tv_sec = (time_t)(rem / NSEC_PER_SEC),
+            .tv_usec = (suseconds_t)((rem % NSEC_PER_SEC) / NSEC_PER_USEC),
+        };
         if (tv.tv_usec >= 1000000)
             tv.tv_usec = 999999;
 
@@ -360,39 +333,48 @@ static int client_wait_ready(client_ctx_t *ctx, u64 expected_nonce, u64 timeout_
         if (rc < 0) {
             if (errno == EINTR)
                 continue;
-            log_error_errno("client_wait_ready", "select");
+            log_error_errno(log_tag, "select");
             return -1;
         }
         if (rc == 0)
             continue;
+        if (FD_ISSET(ctx->sockfd, &rfds))
+            return 1;
+    }
+}
 
-        if (FD_ISSET(ctx->sockfd, &rfds)) {
-            ready_msg_t ready;
-            int payload_len = 0;
-            int got = client_recv_packet(ctx, &pack, &payload_len);
-            if (got < 0)
-                return -1;
-            if (got == 0)
-                continue;
+static int client_wait_ready(client_ctx_t *ctx, u64 expected_nonce, u64 timeout_ns) {
+    u64 deadline = mono_ns() + timeout_ns;
+    pack_t pack;
 
-            if (parse_ready_message(pack.payload, (size_t)payload_len, &ready)) {
-                if (ready.have_nonce && ready.nonce == expected_nonce) {
-                    if (ready.from_userland)
-                        return 0;
-                    if (ready.from_kernel)
-                        return 2;
-                }
-                log_info("client_wait_ready",
-                         "event=ready_ignored expected=%016llx recv=%016llx has_nonce=%d src=userland:%d kernel:%d",
-                         (unsigned long long)expected_nonce,
-                         (unsigned long long)ready.nonce,
-                         ready.have_nonce,
-                         ready.from_userland,
-                         ready.from_kernel);
-                continue;
+    while (1) {
+        int ready = client_wait_socket_ready(ctx, deadline, "client_wait_ready");
+        if (ready <= 0)
+            return ready < 0 ? -1 : 1;
+
+        ready_msg_t ready_msg;
+        int payload_len = 0;
+        int got = client_recv_packet(ctx, &pack, &payload_len);
+        if (got < 0)
+            return -1;
+        if (got == 0)
+            continue;
+
+        if (parse_ready_message(pack.payload, (size_t)payload_len, &ready_msg)) {
+            if (ready_msg.have_nonce && ready_msg.nonce == expected_nonce) {
+                if (ready_msg.from_userland)
+                    return 0;
+                if (ready_msg.from_kernel)
+                    return 2;
             }
-
-            /* non-ready payload during handshake, ignore */
+            log_info("client_wait_ready",
+                     "event=ready_ignored expected=%016llx recv=%016llx has_nonce=%d src=userland:%d kernel:%d",
+                     (unsigned long long)expected_nonce,
+                     (unsigned long long)ready_msg.nonce,
+                     ready_msg.have_nonce,
+                     ready_msg.from_userland,
+                     ready_msg.from_kernel);
+            continue;
         }
     }
 }
@@ -452,36 +434,17 @@ static int client_handle_stdin_event(client_ctx_t *ctx) {
 static int wait_resp(client_ctx_t *ctx, u64 deadline_ns) {
     int seen = 0;
     for (;;) {
-        u64 now = mono_ns();
-        if (now >= deadline_ns)
-            return seen ? 1 : 0;
-
-        u64 rem = deadline_ns - now;
-        struct timeval tv;
-        tv.tv_sec = (time_t)(rem / NSEC_PER_SEC);
-        tv.tv_usec = (suseconds_t)((rem % NSEC_PER_SEC) / NSEC_PER_USEC);
-        if (tv.tv_usec >= 1000000)
-            tv.tv_usec = 999999;
-
-        fd_set rfds;
-        FD_ZERO(&rfds);
-        FD_SET(ctx->sockfd, &rfds);
-
-        int rc = select(ctx->sockfd + 1, &rfds, NULL, NULL, &tv);
-        if (rc < 0) {
-            if (errno == EINTR)
-                continue;
-            log_error_errno("client_wait", "select");
+        int ready = client_wait_socket_ready(ctx, deadline_ns, "client_wait");
+        if (ready < 0)
             return -1;
-        }
-        if (rc == 0)
+        if (ready == 0)
             return seen ? 1 : 0;
 
-        if (FD_ISSET(ctx->sockfd, &rfds)) {
-            int r = recv_once_and_print(ctx);
-            if (r < 0) return -1;
-            if (r > 0) seen = 1;
-        }
+        int r = recv_once_and_print(ctx);
+        if (r < 0)
+            return -1;
+        if (r > 0)
+            seen = 1;
     }
 }
 
