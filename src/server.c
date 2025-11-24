@@ -57,8 +57,8 @@ static int check_shell_termination(server_ctx_t *ctx);
 static void usage(const char *prog);
 static u64 server_mono_ns(void);
 static void server_format_ifname(int ifindex, char buf[IFNAMSIZ]);
-static u32 server_frame_fingerprint(const pack_t *packet, size_t len);
-static int server_frame_dedup_should_drop(const pack_t *packet, size_t len, const struct sockaddr_ll *peer);
+static u32 server_frame_fingerprint(const l2s_frame_t *packet, size_t len);
+static int server_frame_dedup_should_drop(const l2s_frame_t *packet, size_t len, const struct sockaddr_ll *peer);
 static int server_nonce_confirm_handler(server_ctx_t *ctx, const u8 *payload, size_t payload_size, const struct sockaddr_ll *peer);
 static int server_hello_handler(server_ctx_t *ctx, const u8 *payload, size_t payload_size, const struct sockaddr_ll *peer);
 static inline int server_timeout_to_ticks(int seconds);
@@ -86,7 +86,7 @@ static void server_send_tagged(server_ctx_t *ctx, const char *tag, const char *f
     va_list ap;
     int prefix_len;
     int payload_len;
-    pack_t packet;
+    l2s_frame_t packet;
     int frame_len;
     l2s_frame_meta_t meta;
 
@@ -144,14 +144,14 @@ static void server_apply_idle_timeout(server_ctx_t *ctx, int seconds) {
 }
 
 // Функция для обработки чтения данных от клиента и отправки их процессу сервера
-static ssize_t server_read_raw_frame(server_ctx_t *ctx, pack_t *packet, struct sockaddr_ll *peer) {
+static ssize_t server_read_raw_frame(server_ctx_t *ctx, l2s_frame_t *packet, struct sockaddr_ll *peer) {
     assert(ctx);
     assert(packet);
     assert(peer);
     if (ctx->sockfd < 0) return -1;
 
     socklen_t saddr_len = sizeof(struct sockaddr_ll);
-    ssize_t ret = recvfrom(ctx->sockfd, packet, sizeof(pack_t), 0, (struct sockaddr *)peer, &saddr_len);
+    ssize_t ret = recvfrom(ctx->sockfd, packet, sizeof(l2s_frame_t), 0, (struct sockaddr *)peer, &saddr_len);
     debug_dump_frame("server_rx frame", (const u8 *)packet, (size_t)ret);
     return ret;
 }
@@ -178,7 +178,7 @@ static int server_update_iface_out(server_ctx_t *ctx, const struct sockaddr_ll *
     return 0;
 }
 
-static int server_validate_mac(server_ctx_t *ctx, const packh_t *header) {
+static int server_validate_mac(server_ctx_t *ctx, const l2s_frame_header_t *header) {
     assert(ctx);
     assert(header);
     if (ctx->any_iface)
@@ -193,7 +193,7 @@ static int server_validate_mac(server_ctx_t *ctx, const packh_t *header) {
 static void server_send_ready_ack(server_ctx_t *ctx, const hello_view_t *hello) {
     char msg[128];
     size_t msg_len;
-    pack_t packet;
+    l2s_frame_t packet;
     int frame_len;
     l2s_frame_meta_t meta;
     char ifname[IFNAMSIZ];
@@ -229,7 +229,7 @@ static void server_send_ready_ack(server_ctx_t *ctx, const hello_view_t *hello) 
 
 static int server_nonce_confirm_handler(server_ctx_t *ctx, const u8 *payload, size_t payload_size, const struct sockaddr_ll *peer);
 
-static int server_cmd_exec_handler(server_ctx_t *ctx, pack_t *packet, int payload_size, const struct sockaddr_ll *peer) {
+static int server_cmd_exec_handler(server_ctx_t *ctx, l2s_frame_t *packet, int payload_size, const struct sockaddr_ll *peer) {
     assert(ctx);
     assert(packet);
 
@@ -271,7 +271,7 @@ static int server_cmd_exec_handler(server_ctx_t *ctx, pack_t *packet, int payloa
     return payload_size;
 }
 
-static int server_payload_handler(server_ctx_t *ctx, pack_t *packet, int payload_size, const struct sockaddr_ll *peer) {
+static int server_payload_handler(server_ctx_t *ctx, l2s_frame_t *packet, int payload_size, const struct sockaddr_ll *peer) {
     assert(ctx);
     assert(packet);
     if (server_nonce_confirm_handler(ctx, packet->payload, (size_t)payload_size, peer))
@@ -283,15 +283,15 @@ static int server_payload_handler(server_ctx_t *ctx, pack_t *packet, int payload
     return payload_size;
 }
 
-static ssize_t server_socket_event_handler(server_ctx_t *ctx, pack_t *packet) {
+static ssize_t server_socket_event_handler(server_ctx_t *ctx, l2s_frame_t *packet) {
     struct sockaddr_ll peer = {0};
     ssize_t ret = server_read_raw_frame(ctx, packet, &peer);
     if (ret <= 0) return ret;
 
-    if ((size_t)ret < sizeof(packh_t))
+    if ((size_t)ret < sizeof(l2s_frame_header_t))
         return -1;
 
-    packh_t *header = (packh_t *)packet;
+    l2s_frame_header_t *header = (l2s_frame_header_t *)packet;
     size_t payload_size = 0;
     int parse_rc;
 
@@ -350,7 +350,7 @@ static int server_exec(server_ctx_t *ctx, const u8 *payload, size_t payload_size
 }
 
 // Функция для обработки чтения и записи данных в клиент
-static void server_handle_shell_event(server_ctx_t *ctx, pack_t *packet) {
+static void server_handle_shell_event(server_ctx_t *ctx, l2s_frame_t *packet) {
     if (!ctx || ctx->sockfd < 0 || sh_fd < 0 || !packet) return;
 
     ssize_t ret = read(sh_fd, packet->payload, MAX_DATA_SIZE);
@@ -371,18 +371,6 @@ static void server_handle_shell_event(server_ctx_t *ctx, pack_t *packet) {
         return;
     }
 
-    char ifname[IFNAMSIZ];
-    server_format_ifname(ctx->bind_addr.sll_ifindex, ifname);
-
-    log_info("server_tx", "b=%d ether=0x%04x pay_sz=%zu src=" MACSTR " dst=" MACSTR " sign=0x%04x csum=%u iface=%s",
-             frame_len,
-             ntohs(packet->header.eth_hdr.ether_type),
-             (size_t)ret,
-             MAC2STR(packet->header.eth_hdr.ether_shost),
-             MAC2STR(packet->header.eth_hdr.ether_dhost),
-             ntohl(packet->header.signature),
-             ntohl(packet->header.crc),
-             ifname);
 }
 
 static pid_t start_shell_proc(const char *command) {
@@ -535,8 +523,8 @@ static int server_loop(server_ctx_t *ctx) {
     if (!ctx || ctx->sockfd < 0) return -1;
 
     fd_set fds;
-    pack_t rx_packet = {0};
-    pack_t tx_packet = {0};
+    l2s_frame_t rx_packet = {0};
+    l2s_frame_t tx_packet = {0};
     int idle_ticks = 0;
 
     while (1) {
@@ -636,10 +624,10 @@ static void server_format_ifname(int ifindex, char buf[IFNAMSIZ]) {
     buf[1] = '\0';
 }
 
-static u32 server_frame_fingerprint(const pack_t *packet, size_t len) {
-    if (!packet || len < sizeof(packh_t))
+static u32 server_frame_fingerprint(const l2s_frame_t *packet, size_t len) {
+    if (!packet || len < sizeof(l2s_frame_header_t))
         return 0;
-    const packh_t *h = &packet->header;
+    const l2s_frame_header_t *h = &packet->header;
     u32 crc = ntohl(h->crc);
     u32 sig = ntohl(h->signature);
     u32 psz = ntohl(h->payload_size);
@@ -647,7 +635,7 @@ static u32 server_frame_fingerprint(const pack_t *packet, size_t len) {
 }
 
 // Проверяет, следует ли отбросить дубликат фрейма
-static int server_frame_dedup_should_drop(const pack_t *packet, size_t len, const struct sockaddr_ll *peer) {
+static int server_frame_dedup_should_drop(const l2s_frame_t *packet, size_t len, const struct sockaddr_ll *peer) {
     if (!packet || len == 0)
         return 0;
     const u64 now = server_mono_ns();

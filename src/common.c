@@ -190,7 +190,7 @@ int l2s_send_frame_to_socket(int sockfd, const struct sockaddr_ll *dst,
     if (sockfd < 0 || !dst || !meta)
         return -1;
 
-    pack_t packet = {0};
+    l2s_frame_t packet = {0};
     int frame_len = l2s_build_frame(&packet, sizeof(packet), meta, payload, payload_len);
     if (frame_len < 0)
         return frame_len;

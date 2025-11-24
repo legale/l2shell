@@ -70,12 +70,8 @@ int l2s_build_frame(l2s_frame_t *frame, size_t frame_capacity,
 int l2s_parse_frame(l2s_frame_t *frame, size_t frame_len,
                     u32 expected_signature, size_t *payload_len_out);
 
-// Compatibility wrappers for legacy call sites
-typedef l2s_frame_header_t packh_t;
-typedef l2s_frame_t pack_t;
-
-int build_packet(pack_t *packet, size_t payload_size, const u8 src_mac[ETH_ALEN],
+int build_packet(l2s_frame_t *packet, size_t payload_size, const u8 src_mac[ETH_ALEN],
                  const u8 dst_mac[ETH_ALEN], u32 signature);
-int parse_packet(pack_t *packet, ssize_t frame_len, u32 expected_signature);
+int parse_packet(l2s_frame_t *packet, ssize_t frame_len, u32 expected_signature);
 
 #endif // L2S_PROTO_H

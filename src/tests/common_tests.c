@@ -116,7 +116,7 @@ static void test_enc_dec_roundtrip(void) {
 
 static void test_build_and_parse_packet(void) {
     PRINT_TEST_START("build_and_parse_packet");
-    pack_t packet = {0};
+    l2s_frame_t packet = {0};
     u8 src_mac[ETH_ALEN];
     u8 dst_mac[ETH_ALEN];
     const char *message = "ping_over_l2shell";
@@ -128,7 +128,7 @@ static void test_build_and_parse_packet(void) {
     int frame_len = build_packet(&packet, payload_len, src_mac, dst_mac, SERVER_SIGNATURE);
     TEST_ASSERT(frame_len > 0);
 
-    pack_t checksum_probe = {0};
+    l2s_frame_t checksum_probe = {0};
     memcpy(&checksum_probe, &packet, (size_t)frame_len);
     if (payload_len > 0) {
         u8 *nonce_ptr = checksum_probe.payload;
@@ -140,7 +140,7 @@ static void test_build_and_parse_packet(void) {
     u32 expected_crc = csum32((const u8 *)&checksum_probe, (size_t)frame_len);
     TEST_ASSERT_EQ(ntohl(packet.header.crc), expected_crc);
 
-    pack_t parsed = {0};
+    l2s_frame_t parsed = {0};
     memcpy(&parsed, &packet, (size_t)frame_len);
     int parsed_len = parse_packet(&parsed, frame_len, SERVER_SIGNATURE);
     TEST_ASSERT_EQ(parsed_len, (int)payload_len);
@@ -150,7 +150,7 @@ static void test_build_and_parse_packet(void) {
 
 static void test_build_packet_preserves_padding(void) {
     PRINT_TEST_START("build_packet_preserves_padding");
-    pack_t packet;
+    l2s_frame_t packet;
     memset(&packet, 0xAA, sizeof(packet));
     u8 src_mac[ETH_ALEN];
     u8 dst_mac[ETH_ALEN];
@@ -170,7 +170,7 @@ static void test_build_packet_preserves_padding(void) {
 
 static void test_parse_rejects_signature_mismatch(void) {
     PRINT_TEST_START("parse_rejects_signature_mismatch");
-    pack_t packet = {0};
+    l2s_frame_t packet = {0};
     u8 src_mac[ETH_ALEN];
     u8 dst_mac[ETH_ALEN];
     const char *message = "mismatch";
@@ -237,7 +237,7 @@ static void test_frame_dedup_null_cache(void) {
 
 static void test_build_packet_rejects_large_payload(void) {
     PRINT_TEST_START("build_packet_rejects_large_payload");
-    pack_t packet = {0};
+    l2s_frame_t packet = {0};
     u8 src_mac[ETH_ALEN];
     u8 dst_mac[ETH_ALEN];
 
@@ -249,7 +249,7 @@ static void test_build_packet_rejects_large_payload(void) {
 
 static void test_parse_packet_detects_crc_mismatch(void) {
     PRINT_TEST_START("parse_packet_detects_crc_mismatch");
-    pack_t packet = {0};
+    l2s_frame_t packet = {0};
     u8 src_mac[ETH_ALEN];
     u8 dst_mac[ETH_ALEN];
     const char *payload = "crc_mismatch";
@@ -270,7 +270,7 @@ static void test_parse_packet_detects_crc_mismatch(void) {
 
 static void test_parse_packet_rejects_length_mismatch(void) {
     PRINT_TEST_START("parse_packet_rejects_length_mismatch");
-    pack_t packet = {0};
+    l2s_frame_t packet = {0};
     u8 src_mac[ETH_ALEN];
     u8 dst_mac[ETH_ALEN];
     const char *payload = "length-check";
@@ -291,7 +291,7 @@ static void test_parse_packet_rejects_length_mismatch(void) {
 
 static void test_build_packet_null_args(void) {
     PRINT_TEST_START("build_packet_null_args");
-    pack_t packet = {0};
+    l2s_frame_t packet = {0};
     u8 mac[ETH_ALEN] = {0};
     TEST_ASSERT(build_packet(NULL, 0, mac, mac, CLIENT_SIGNATURE) < 0);
     TEST_ASSERT(build_packet(&packet, 0, NULL, mac, CLIENT_SIGNATURE) < 0);
@@ -301,7 +301,7 @@ static void test_build_packet_null_args(void) {
 
 static void test_build_packet_sets_fields(void) {
     PRINT_TEST_START("build_packet_sets_fields");
-    pack_t packet = {0};
+    l2s_frame_t packet = {0};
     u8 src_mac[ETH_ALEN];
     u8 dst_mac[ETH_ALEN];
     const char payload[] = {0x11, 0x22, 0x33, 0x44, 0x55};
@@ -311,14 +311,14 @@ static void test_build_packet_sets_fields(void) {
     memcpy(packet.payload, payload, payload_len);
 
     int frame_len = build_packet(&packet, payload_len, src_mac, dst_mac, CLIENT_SIGNATURE);
-    TEST_ASSERT(frame_len == (int)(sizeof(packh_t) + payload_len + PACKET_NONCE_LEN));
+    TEST_ASSERT(frame_len == (int)(sizeof(l2s_frame_header_t) + payload_len + PACKET_NONCE_LEN));
     TEST_ASSERT(ntohs(packet.header.eth_hdr.ether_type) == ETHER_TYPE_CUSTOM);
     TEST_ASSERT_MEMEQ(packet.header.eth_hdr.ether_shost, src_mac, ETH_ALEN);
     TEST_ASSERT_MEMEQ(packet.header.eth_hdr.ether_dhost, dst_mac, ETH_ALEN);
     TEST_ASSERT(ntohl(packet.header.signature) == (u32)CLIENT_SIGNATURE);
     TEST_ASSERT(ntohl(packet.header.payload_size) == (u32)(payload_len + PACKET_NONCE_LEN));
 
-    pack_t decrypted = packet;
+    l2s_frame_t decrypted = packet;
     u8 *nonce_ptr = decrypted.payload;
     u8 *data_ptr = decrypted.payload + PACKET_NONCE_LEN;
     enc_dec(data_ptr, data_ptr, (u8 *)&packet.header.crc, payload_len);
@@ -333,7 +333,7 @@ static void test_build_packet_sets_fields(void) {
 
 static void test_parse_packet_rejects_wrong_ethertype(void) {
     PRINT_TEST_START("parse_packet_rejects_wrong_ethertype");
-    pack_t packet = {0};
+    l2s_frame_t packet = {0};
     u8 src_mac[ETH_ALEN];
     u8 dst_mac[ETH_ALEN];
     test_set_macs(src_mac, dst_mac);
@@ -347,7 +347,7 @@ static void test_parse_packet_rejects_wrong_ethertype(void) {
 
 static void test_parse_packet_rejects_truncated(void) {
     PRINT_TEST_START("parse_packet_rejects_truncated");
-    pack_t packet = {0};
+    l2s_frame_t packet = {0};
     u8 src_mac[ETH_ALEN];
     u8 dst_mac[ETH_ALEN];
     const char *payload = "truncate";
@@ -364,12 +364,12 @@ static void test_parse_packet_rejects_truncated(void) {
 
 static void test_parse_packet_payload_too_large(void) {
     PRINT_TEST_START("parse_packet_payload_too_large");
-    pack_t packet = {0};
+    l2s_frame_t packet = {0};
     packet.header.eth_hdr.ether_type = htons(ETHER_TYPE_CUSTOM);
     packet.header.signature = htonl(CLIENT_SIGNATURE);
     packet.header.payload_size = htonl(MAX_PAYLOAD_SIZE + 1U);
     PRINT_TEST_INFO("error is expected");
-    TEST_ASSERT(parse_packet(&packet, sizeof(packh_t), CLIENT_SIGNATURE) < 0);
+    TEST_ASSERT(parse_packet(&packet, sizeof(l2s_frame_header_t), CLIENT_SIGNATURE) < 0);
     PRINT_TEST_PASSED();
 }
 

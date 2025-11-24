@@ -208,7 +208,7 @@ static void norm_in(u8 *buf, size_t len) {
             buf[i] = '\r';
 }
 
-static int client_recv_packet(client_ctx_t *ctx, pack_t *pack, int *payload_len) {
+static int client_recv_packet(client_ctx_t *ctx, l2s_frame_t *pack, int *payload_len) {
     struct sockaddr_ll peer;
     socklen_t plen = sizeof(peer);
     ssize_t got;
@@ -241,7 +241,7 @@ static int client_recv_packet(client_ctx_t *ctx, pack_t *pack, int *payload_len)
 }
 
 static int recv_once_and_print(client_ctx_t *ctx) {
-    pack_t pack;
+    l2s_frame_t pack;
     int payload_len = 0;
     int rc = client_recv_packet(ctx, &pack, &payload_len);
     if (rc <= 0)
@@ -345,7 +345,7 @@ static int client_wait_socket_ready(client_ctx_t *ctx, u64 deadline_ns, const ch
 
 static int client_wait_ready(client_ctx_t *ctx, u64 expected_nonce, u64 timeout_ns) {
     u64 deadline = mono_ns() + timeout_ns;
-    pack_t pack;
+    l2s_frame_t pack;
 
     while (1) {
         int ready = client_wait_socket_ready(ctx, deadline, "client_wait_ready");
