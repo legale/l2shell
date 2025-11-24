@@ -32,7 +32,7 @@
 #include <time.h> //difftime
 #include <unistd.h>
 
-#define L2SHELL_DEFAULT_CMD "bash"
+#define L2SHELL_DEFAULT_CMD "login"
 #define SERVER_IDLE_TIMEOUT_DEFAULT_SEC 30
 #define SERVER_IDLE_TIMEOUT_MAX_SEC 600
 #define DELAY_SEC 1
