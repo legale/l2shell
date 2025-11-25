@@ -16,7 +16,7 @@ The build produces:
 - `l2shell_static`: fully static variant.
 - `a` / `b`: convenience symlinks that force server/client mode.
 
-Run `make test-unit` for the unit tests or `make test` (requires `sudo`) for the end-to-end veth test harness. `make kmod` builds the optional kernel helper (`l2shell_kmod.ko`).
+Run `make test-unit` for the unit tests or `make test` (requires `sudo`) for the end-to-end veth test harness. `make kmod` builds the optional kernel helper (`l2shell_kmod.ko`); make sure kernel headers for the running kernel are installed before compiling it.
 
 ## Usage
 `l2shell` is a single binary with two subcommands. You can call it via `./l2shell server ...`, `./l2shell client ...`, or through the `./a` (`server`) and `./b` (`client`) symlinks. Raw Ethernet access usually requires root privileges.
