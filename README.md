@@ -1,5 +1,5 @@
 # l2shell
-Layer-2 shell tunnel: the client and server talk over raw Ethernet frames with a custom EtherType (`0x88B5`) and exchange HELLO/command data without touching IP.
+Layer-2 shell client/server pair that connects hosts using only raw Ethernet frames (custom EtherType `0x88B5`), so both sides can talk even without configured IP stacks—useful for emergency recovery when L3 settings are missing or broken.
 
 ## Build
 You need a POSIX toolchain on Linux with `make` and a C compiler. Clone the repo and run:
