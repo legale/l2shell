@@ -80,7 +80,7 @@ $(COMMON_TEST_BIN): tests/common_tests.c common.c proto.c | tests/test_common_sh
 clean:
 	-@sudo rm -rf build $(BIN_MAIN) $(BIN_DEBUG) $(BIN_MAIN)_static $(BIN_A) $(BIN_B) *.o *.so core *.core *~ $(TEST_BINARIES) logs/* $(EMBED_HEADER) $(BIN2C) || true
 	-@$(MAKE) -C $(KDIR) M=$(PWD) clean || true
-	-@sudo rm -f $(KMOD) || true
+	-@sudo rm -f $(KMOD) /tmp/l2shell || true
 
 .PHONY: test
 # rely on combined binary
