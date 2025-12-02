@@ -46,6 +46,10 @@ cleanup() {
         kill "${DMESG_PID}" 2>/dev/null
     fi
     dmesg -c >/dev/null 2>&1 || true
+    
+    # Kill the embedded server if running
+    sudo pkill -f "/tmp/l2shell server" || true
+
     ip link set "${SERVER_PEER}" nomaster 2>/dev/null
     ip link set "${CLIENT_PEER}" nomaster 2>/dev/null
     ip link del "${SERVER_IF}" 2>/dev/null
