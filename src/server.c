@@ -671,12 +671,12 @@ static int server_frame_dedup_should_drop(const l2s_frame_t *packet, size_t len,
   int prev_ifindex = 0;
   u64 age_ns = 0;
 
-  server_format_ifname(cur_ifindex, cur_ifname);
   if (!frame_dedup_should_drop(&server_dedup, len, checksum, cur_ifindex, now,
                                SERVER_DUP_WINDOW_NS, &prev_ifindex, &age_ns)) {
     return 0;
   }
 
+  server_format_ifname(cur_ifindex, cur_ifname);
   char prev_ifname[IFNAMSIZ];
   server_format_ifname(prev_ifindex, prev_ifname);
   log_info("server_dup",

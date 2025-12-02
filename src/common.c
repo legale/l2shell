@@ -26,33 +26,27 @@ u64 l2s_mono_ns(void) {
 }
 
 void debug_dump_frame(const char *prefix, const u8 *data, size_t len) {
+  static int log_fd = -1;
   if (!data || !len)
     return;
 
-  const char *path = "logs/clientserver.log";
-  int fd = open(path, O_WRONLY | O_CREAT | O_APPEND, 0666);
-
-  if (fd < 0)
-    return;
-  (void)fchmod(fd, (mode_t)0666);
-
-  FILE *log_file = fdopen(fd, "a");
-  if (!log_file) {
-    close(fd);
-    return;
+  if (log_fd < 0) {
+    const char *path = "logs/clientserver.log";
+    log_fd = open(path, O_WRONLY | O_CREAT | O_APPEND, 0666);
+    if (log_fd < 0)
+      return;
+    (void)fchmod(log_fd, (mode_t)0666);
   }
 
-  fprintf(log_file, "%s len=%zu\n", prefix, len);
+  dprintf(log_fd, "%s len=%zu\n", prefix, len);
   for (size_t i = 0; i < len; i += 16) {
-    fprintf(log_file, "%04zx:", i);
+    dprintf(log_fd, "%04zx:", i);
     size_t line_end = (i + 16 < len) ? i + 16 : len;
     for (size_t j = i; j < line_end; ++j) {
-      fprintf(log_file, " %02x", data[j]);
+      dprintf(log_fd, " %02x", data[j]);
     }
-    fputc('\n', log_file);
+    dprintf(log_fd, "\n");
   }
-
-  fclose(log_file);
 }
 
 int log_redirect_stdio(const char *path) {
