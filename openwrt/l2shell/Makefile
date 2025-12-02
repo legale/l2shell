@@ -16,6 +16,7 @@ define Package/l2shell
   SECTION:=net
   CATEGORY:=Network
   TITLE:=Layer-2 shell client and server
+  DEPENDS:=+libc
   URL:=https://github.com/legale/l2shell
 endef
 
