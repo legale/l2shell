@@ -56,7 +56,6 @@ static int server_exec(server_ctx_t *ctx, const u8 *payload,
                        size_t payload_size);
 static int check_shell_termination(server_ctx_t *ctx);
 static void usage(const char *prog);
-static u64 server_mono_ns(void);
 static void server_format_ifname(int ifindex, char buf[IFNAMSIZ]);
 static u32 server_frame_fingerprint(const l2s_frame_t *packet, size_t len);
 static int server_frame_dedup_should_drop(const l2s_frame_t *packet, size_t len,
@@ -596,7 +595,7 @@ static int server_loop(server_ctx_t *ctx) {
       if (FD_ISSET(ctx->sockfd, &fds)) {
         if (server_socket_event_handler(ctx, &rx_packet) >= 0) {
           last_client_activity = time(NULL);
-          continue;
+          continue; // skip idle timeout check
         }
       }
     }
@@ -640,11 +639,6 @@ static void usage(const char *prog) {
   fprintf(stderr, "Usage: %s [--log-file <path>] <interface|any> [--help]\n",
           prog);
 }
-static u64 server_mono_ns(void) {
-  struct timespec ts;
-  clock_gettime(CLOCK_MONOTONIC, &ts);
-  return (u64)ts.tv_sec * NSEC_PER_SEC + (u64)ts.tv_nsec;
-}
 
 static void server_format_ifname(int ifindex, char buf[IFNAMSIZ]) {
   if (!buf)
@@ -670,7 +664,7 @@ static int server_frame_dedup_should_drop(const l2s_frame_t *packet, size_t len,
                                           const struct sockaddr_ll *peer) {
   if (!packet || len == 0)
     return 0;
-  const u64 now = server_mono_ns();
+  const u64 now = l2s_mono_ns();
   const u32 checksum = server_frame_fingerprint(packet, len);
   const int cur_ifindex = peer ? peer->sll_ifindex : 0;
   char cur_ifname[IFNAMSIZ];

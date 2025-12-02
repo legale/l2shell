@@ -3,9 +3,9 @@
 #ifndef COMMON_H
 #define COMMON_H
 
-#include "proto.h"
 #include "hello_proto.h"
 #include "intshort.h"
+#include "proto.h"
 
 #include <net/if.h>
 #include <netinet/ether.h>
@@ -55,16 +55,22 @@
 
 extern const u8 broadcast_mac[ETH_ALEN];
 
+u64 l2s_mono_ns(void);
 void debug_dump_frame(const char *prefix, const u8 *data, size_t len);
-int init_packet_socket(int *sockfd, struct ifreq *ifr, struct sockaddr_ll *bind_addr, const char *iface, int bind_to_device);
+int init_packet_socket(int *sockfd, struct ifreq *ifr,
+                       struct sockaddr_ll *bind_addr, const char *iface,
+                       int bind_to_device);
 void deinit_packet_socket(int *sockfd);
 int l2s_send_frame_to_socket(int sockfd, const struct sockaddr_ll *dst,
                              const l2s_frame_meta_t *meta, const void *payload,
                              size_t payload_len, const char *debug_prefix);
 ssize_t l2s_write_all(int fd, const void *buf, size_t count);
-void log_info(const char *tag, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
-void log_error(const char *tag, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
-void log_error_errno(const char *tag, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
+void log_info(const char *tag, const char *fmt, ...)
+    __attribute__((format(printf, 2, 3)));
+void log_error(const char *tag, const char *fmt, ...)
+    __attribute__((format(printf, 2, 3)));
+void log_error_errno(const char *tag, const char *fmt, ...)
+    __attribute__((format(printf, 2, 3)));
 int log_redirect_stdio(const char *path);
 
 #endif // COMMON_H

@@ -103,13 +103,6 @@ static void usage(const char *p);
 static int client_ctx_init(client_ctx_t *ctx, const client_args_t *args);
 static void client_ctx_deinit(client_ctx_t *ctx);
 
-/* time helpers */
-static u64 mono_ns(void) {
-  struct timespec ts;
-  clock_gettime(CLOCK_MONOTONIC, &ts);
-  return (u64)ts.tv_sec * 1000000000ULL + (u64)ts.tv_nsec;
-}
-
 static u64 client_generate_nonce(void) {
   struct timespec ts;
   clock_gettime(CLOCK_REALTIME, &ts);
@@ -358,7 +351,7 @@ static int client_wait_socket_ready(client_ctx_t *ctx, u64 deadline_ns,
                                     const char *log_tag) {
   assert(ctx);
   while (1) {
-    u64 now = mono_ns();
+    u64 now = l2s_mono_ns();
     if (now >= deadline_ns)
       return 0;
 
@@ -390,7 +383,7 @@ static int client_wait_socket_ready(client_ctx_t *ctx, u64 deadline_ns,
 
 static int client_wait_ready(client_ctx_t *ctx, u64 expected_nonce,
                              u64 timeout_ns) {
-  u64 deadline = mono_ns() + timeout_ns;
+  u64 deadline = l2s_mono_ns() + timeout_ns;
   l2s_frame_t pack;
 
   while (1) {
@@ -504,15 +497,15 @@ static int client_loop(client_ctx_t *ctx) {
     return -1;
 
   if (ctx->heartbeat_interval_ns > 0 && ctx->next_heartbeat_ns == 0)
-    ctx->next_heartbeat_ns = mono_ns() + ctx->heartbeat_interval_ns;
+    ctx->next_heartbeat_ns = l2s_mono_ns() + ctx->heartbeat_interval_ns;
 
   for (;;) {
-    u64 now = mono_ns();
+    u64 now = l2s_mono_ns();
     if (ctx->heartbeat_interval_ns > 0 && ctx->next_heartbeat_ns <= now) {
       if (client_send_heartbeat(ctx) != 0)
         return -1;
       ctx->next_heartbeat_ns = now + ctx->heartbeat_interval_ns;
-      now = mono_ns();
+      now = l2s_mono_ns();
     }
 
     u64 wait_ns = NSEC_PER_SEC;
@@ -556,7 +549,7 @@ static int client_loop(client_ctx_t *ctx) {
     }
 
     if (stdin_activity && ctx->heartbeat_interval_ns > 0)
-      ctx->next_heartbeat_ns = mono_ns() + ctx->heartbeat_interval_ns;
+      ctx->next_heartbeat_ns = l2s_mono_ns() + ctx->heartbeat_interval_ns;
 
     if (FD_ISSET(ctx->sockfd, &rfds)) {
       if (client_handle_socket_event(ctx) != 0)
@@ -672,7 +665,7 @@ int client_main(int argc, char **argv) {
   }
 
   if (ctx.heartbeat_interval_ns > 0)
-    ctx.next_heartbeat_ns = mono_ns() + ctx.heartbeat_interval_ns;
+    ctx.next_heartbeat_ns = l2s_mono_ns() + ctx.heartbeat_interval_ns;
 
   if (a.cmd) {
     u8 buf[MAX_DATA_SIZE];
@@ -697,7 +690,7 @@ int client_main(int argc, char **argv) {
       return 1;
     }
 
-    u64 dl = mono_ns() + RESPONSE_TIMEOUT_NS;
+    u64 dl = l2s_mono_ns() + RESPONSE_TIMEOUT_NS;
     int seen = wait_resp(&ctx, dl);
     if (seen <= 0) {
       if (seen == 0)
