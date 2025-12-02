@@ -296,9 +296,9 @@ static int client_send_heartbeat(client_ctx_t *ctx) {
     return -1;
   }
   int rc = client_send_payload(ctx, payload, (size_t)len);
-  if (rc == 0) {
-    log_info("client_heartbeat", "event=sent interval_ns=%llu",
-             (unsigned long long)ctx->heartbeat_interval_ns);
+  if (rc != 0) {
+    log_error("client_heartbeat", "event=send_failed interval_ns=%llu",
+              (unsigned long long)ctx->heartbeat_interval_ns);
   }
   return rc;
 }
