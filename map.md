@@ -5,15 +5,26 @@
 
 > **Второе правило:** Мы пишем надежный код на Cи, поэтому стараемся использовать power of ten rules NASA:
 1. Avoid complex flow constructs, such as goto and recursion.
-1. All loops must have fixed bounds. This prevents runaway code.
-1. Avoid heap memory allocation after initialization.
-1. Restrict functions to a single printed page.
-1. Use a minimum average of two runtime assertions per function.
-1. Restrict the scope of data to the smallest possible.
-1. Check the return value of all non-void functions, or cast to void to indicate the return value is useless.
-1. Use the preprocessor only for header files and simple macros.
-1. Limit pointer use to a single dereference, and do not use function pointers.
-1. Compile with all possible warnings active; all warnings should then be addressed before release of the software.
+2. All loops must have fixed bounds. This prevents runaway code.
+3. Avoid heap memory allocation after initialization.
+4. Restrict functions to a single printed page.
+5. Use a minimum average of two runtime assertions per function.
+Use this MACRO:
+```
+#define ASSERT(expr)                                                           \
+  do {                                                                         \
+    if (!(expr)) {                                                             \
+      syslog2(LOG_CRIT, "VERIFY FAILED: %s at %s:%d in %s()", #expr, __FILE__, \
+              __LINE__, __func__);                                             \
+      abort();                                                                 \
+    }                                                                          \
+  } while (0)
+```
+6. Restrict the scope of data to the smallest possible.
+7. Check the return value of all non-void functions, or cast to void to indicate the return value is useless.
+8. Use the preprocessor only for header files and simple macros.
+9. Limit pointer use to a single dereference, and do not use function pointers.
+10. Compile with all possible warnings active; all warnings should then be addressed before release of the software.
 
 > **Остальные правила:**
 1. комментарии пишем через //, используем /**/ только если нужно поместить комментарий внутри строки кода

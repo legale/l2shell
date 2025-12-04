@@ -5,6 +5,7 @@ BIN_A := a
 BIN_B := b
 STRIP ?= strip
 KMOD_STRIP ?= $(STRIP) --strip-debug
+CC ?= cc
 HOSTCC ?= cc
 HOSTCFLAGS ?= -O2 -Wall -Wextra
 EMBED_HEADER := l2shell_embedded.h
